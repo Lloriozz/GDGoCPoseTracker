@@ -1,0 +1,55 @@
+# Files
+.DS_Store
+
+# Machine Learning Folders
+.ipynb_checkpoints/
+env/
+venv/
+.venv/
+data/
+.env
+
+# Editor directories and files
+.vscode
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vue clients
+package-lock.json
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+coverage
+*.local
+
+/cypress/videos/
+/cypress/screenshots/
+
+# Keras Tuner
+**/keras_tuner_dir
+
+# Django server
+__pycache__/
+db.sqlite3
+temp/
+
+# References
+github/
+web/*/static/media/
+web/*/static/images/
+web/*/static/assets/
+web/*/static/css/
+*.env
