@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and profiles
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  avatarUrl     String?
+  bio           String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  workouts      Workout[]
+  forumPosts    ForumPost[]
+  forumComments ForumComment[]
+  poseVectors   PoseVector[]
+  media         Media[]
+}
+
+// Workout model for tracking exercise sessions
+model Workout {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  exerciseId      String
+  exercise        Exercise  @relation(fields: [exerciseId], references: [id])
+  duration        Int       // in seconds
+  score           Float?
+  completed       Boolean   @default(false)
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  
+  @@index([userId])
+  @@index([exerciseId])
+}
+
+// Exercise model for exercise types
+model Exercise {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  type        String    // 'bicep_curl', 'squat', 'plank', 'lunge'
+  description String?
+  difficulty  String    // 'beginner', 'intermediate', 'advanced'
+  duration    Int       // default duration in seconds
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  workouts    Workout[]
+}
+
+// Forum post model
+model ForumPost {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  title      String
+  content    String
+  likes      Int            @default(0)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  
+  comments   ForumComment[]
+  media      Media[]
+  
+  @@index([userId])
+}
+
+// Forum comment model
+model ForumComment {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  postId    String
+  post      ForumPost @relation(fields: [postId], references: [id])
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  media     Media[]
+  
+  @@index([userId])
+  @@index([postId])
+}
+
+// Pose vector model for AI comparison
+model PoseVector {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  exerciseType String  // 'bicep_curl', 'squat', 'plank', 'lunge'
+  vectorData  String   // Store as JSON string for now (will convert to pgvector later)
+  timestamp   DateTime @default(now())
+
+  @@index([userId])
+  @@index([exerciseType])
+}
+
+// Media model for Cloudinary references and training videos
+model Media {
+  id           String         @id @default(uuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  type         String         // 'video', 'image'
+  usage        String         // 'training', 'post', 'comment'
+  cloudinaryId String?        // Cloudinary public ID (for social media)
+  url          String         // Cloudinary URL or S3 URL
+  mimeType     String?
+  size         Int?           // file size in bytes
+  postId       String?        // For post media
+  post         ForumPost?     @relation(fields: [postId], references: [id])
+  commentId    String?        // For comment media
+  comment      ForumComment?  @relation(fields: [commentId], references: [id])
+  exerciseType String?        // For training videos
+  createdAt    DateTime       @default(now())
+  
+  @@index([userId])
+  @@index([type])
+  @@index([usage])
+  @@index([postId])
+  @@index([commentId])
+}
