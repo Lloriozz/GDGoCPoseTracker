@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "PoseTracker Frontend",
+    "slug": "posetracker-frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "posetracker",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
