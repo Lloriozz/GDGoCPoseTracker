@@ -1,0 +1,29 @@
+# =====================================================
+# PoseTracker — Stable Version (ALL platforms)
+# Python 3.10 ONLY
+# =====================================================
+
+# Computer Vision
+opencv-python==4.6.0.66
+mediapipe==0.10.11
+
+# Machine Learning (MATCH TRAINED MODEL)
+scikit-learn==1.1.2
+numpy==1.26.1
+pandas==1.4.3
+
+# Visualization (optional)
+matplotlib==3.6.0
+seaborn==0.12.0
+yellowbrick==1.5
+
+# Backend (optional if using Django)
+Django==4.1.2
+djangorestframework==3.14.0
+django-cors-headers==3.13.0
+django-extensions==3.2.1
+gunicorn==23.0.0
+whitenoise==6.7.0
+
+# Fix protobuf compatibility
+protobuf==3.20.*

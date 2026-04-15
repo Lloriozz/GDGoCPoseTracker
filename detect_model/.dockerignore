@@ -1,0 +1,15 @@
+ven/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.git
+.gitignore
+demo/
+images/
+core/
+web/client/node_modules/
+web/client/dist/
+web/server/db.sqlite3
+web/server/staticfiles/
