@@ -40,7 +40,7 @@ sudo apt install python3-pip python3-venv libgl1 -y
 
 ### 2. Clone Source Code
 ```bash
-git clone [https://github.com/Lloriozz/PoseTracker.git](https://github.com/Lloriozz/PoseTracker.git)
+git clone [https://github.com/Lloriozz/GDGoCPoseTracker.git](https://github.com/Lloriozz/PoseTracker.git)
 cd PoseTracker
 ```
 
