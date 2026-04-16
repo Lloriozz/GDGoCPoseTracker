@@ -12,6 +12,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Load .env so DATABASE_URL and other secrets are available to the Python app
+if (Test-Path -LiteralPath "$PSScriptRoot\.env") {
+    Get-Content "$PSScriptRoot\.env" | ForEach-Object {
+        if ($_ -match "^\s*([^#][^=]+?)\s*=\s*(.+?)\s*$") {
+            [System.Environment]::SetEnvironmentVariable($Matches[1], $Matches[2].Trim('"'))
+        }
+    }
+    Write-Host "==> Loaded .env"
+}
+
 $localModelPath = "D:\hackathon\chatbot\models\gemma-4-E4B-it"
 if ([string]::IsNullOrWhiteSpace($ModelId)) {
     if (Test-Path -LiteralPath $localModelPath) {
