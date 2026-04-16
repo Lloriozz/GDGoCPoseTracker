@@ -8,11 +8,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
 import { QuickActionButton } from './QuickActionButton';
+import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../../constants/theme';
 import { sendChatMessage } from '../../services/chat';
 import { ChatUiMessage } from '../../types/chat';
@@ -49,6 +53,63 @@ export function FloatingChatBubble() {
   const scrollRef = useRef<ScrollView | null>(null);
   const sessionId = useMemo(() => `mobile-session-${Date.now()}`, []);
   const userId = useMemo(() => 'mobile-user-001', []);
+
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+        const SCREEN_WIDTH = Dimensions.get('window').width;
+        const SCREEN_HEIGHT = Dimensions.get('window').height;
+        const BUBBLE_SIZE = 60;
+        const INITIAL_RIGHT = 20;
+        const INITIAL_BOTTOM = 100;
+
+        const originalX = SCREEN_WIDTH - INITIAL_RIGHT - BUBBLE_SIZE;
+        const currentAbsoluteX = originalX + (pan.x as any)._value;
+        const isLeftHalf = currentAbsoluteX + BUBBLE_SIZE / 2 < SCREEN_WIDTH / 2;
+
+        let targetX = 0;
+        if (isLeftHalf) {
+          targetX = 20 - originalX;
+        } else {
+          targetX = 0;
+        }
+
+        // Limit the Y bounds
+        const originalY = SCREEN_HEIGHT - INITIAL_BOTTOM - BUBBLE_SIZE;
+        let targetY = (pan.y as any)._value;
+        const currentAbsoluteY = originalY + targetY;
+
+        if (currentAbsoluteY < 60) {
+          targetY = 60 - originalY;
+        } else if (currentAbsoluteY > SCREEN_HEIGHT - 120) {
+          targetY = (SCREEN_HEIGHT - 120) - originalY;
+        }
+
+        Animated.spring(pan, {
+          toValue: { x: targetX, y: targetY },
+          friction: 6,
+          tension: 40,
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
 
   const handleOpenModal = () => {
     setIsOpen(true);
@@ -106,18 +167,26 @@ export function FloatingChatBubble() {
   return (
     <>
       {/* Floating Bubble Button */}
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={handleOpenModal}
-        style={styles.bubble}
+      <Animated.View
+        style={[
+          styles.bubbleContainer,
+          { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
+        ]}
+        {...panResponder.panHandlers}
       >
-        <Ionicons name="chatbubble" size={28} color="#fff" />
-        {messages.length > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{messages.length}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleOpenModal}
+          style={styles.bubble}
+        >
+          <Ionicons name="chatbubble" size={28} color="#fff" />
+          {messages.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{messages.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Chat Modal */}
       <Modal
@@ -144,6 +213,11 @@ export function FloatingChatBubble() {
             style={styles.chatContainer}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
+            <LinearGradient
+              colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+              locations={[0, 0.35, 1]}
+              style={StyleSheet.absoluteFillObject}
+            />
             <ScrollView
               ref={scrollRef}
               style={styles.scroll}
@@ -198,10 +272,13 @@ export function FloatingChatBubble() {
 }
 
 const styles = StyleSheet.create({
-  bubble: {
+  bubbleContainer: {
     position: 'absolute',
     bottom: 100,
     right: 20,
+    zIndex: 1000,
+  },
+  bubble: {
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -213,7 +290,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-    zIndex: 1000,
   },
   badge: {
     position: 'absolute',
@@ -242,9 +318,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.white,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomColor: '#333',
   },
   closeButton: {
     width: 40,
@@ -262,7 +338,7 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
