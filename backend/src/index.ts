@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes';
 import workoutRoutes from './routes/workoutRoutes';
 import forumRoutes from './routes/forumRoutes';
 import mediaRoutes from './routes/mediaRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/forum', forumRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Start server
 app.listen(PORT, () => {
