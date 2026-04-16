@@ -1,6 +1,6 @@
-from django.urls import re_path
-from . import consumers
+from django.urls import path
+from detection.consumers import PoseConsumer
 
 websocket_urlpatterns = [
-    re_path(r'ws/pose/(?P<exercise_type>\w+)/$', consumers.PoseConsumer.as_asgi()),
+    path('ws/pose/', PoseConsumer.as_asgi()),
 ]

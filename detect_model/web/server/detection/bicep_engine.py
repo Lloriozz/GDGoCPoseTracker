@@ -153,5 +153,7 @@ class BicepCoachEngine:
             "counter": total_reps,
             "score": round(prob * 100, 1),
             "is_correct": is_correct,
-            "correction": correction_text
+            "correction": correction_text,
+            "left_angle": round(l_angle), # Gửi thêm cái này
+            "right_angle": round(r_angle)
         }

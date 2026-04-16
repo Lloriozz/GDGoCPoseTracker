@@ -13,6 +13,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Line } from 'react-native-svg';
 
 import {
   getPoseAnalyzeUrl,
@@ -220,20 +221,43 @@ export default function PoseTrackerScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* 1. Camera View - Luôn lấp đầy màn hình */}
+      {/* 1. Camera View */}
       <CameraView 
         ref={cameraRef} 
         style={StyleSheet.absoluteFill} 
         facing="front" 
       />
 
-      {/* 2. Skeleton Layer - Vẽ các đường nối giữa các khớp */}
+      {/* 2. Skeleton Layer (ĐÃ THÊM ĐƯỜNG NỐI SVG) */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {landmarks.length > 15 && POSE_CONNECTIONS.map(([start, end], i) => {
-          // Lưu ý: Vẽ đường nối dùng Animated Values khá phức tạp bằng View, 
-          // nhưng với 33 điểm bám sát người, chỉ cần hiển thị các Dots là đã đủ Pro.
-          return null; 
-        })}
+        
+        {/* Vẽ đường thẳng nối các khớp */}
+        {landmarks.length > 0 && (
+          <Svg style={StyleSheet.absoluteFill}>
+            {POSE_CONNECTIONS.map(([start, end], i) => {
+              const p1 = landmarks[start];
+              const p2 = landmarks[end];
+              
+              // Nếu điểm bị khuất thì không vẽ đường nối
+              if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) {
+                return null;
+              }
+
+              return (
+                <Line
+                  key={`line-${i}`}
+                  x1={(1 - p1.x) * SCREEN_W}
+                  y1={p1.y * SCREEN_H}
+                  x2={(1 - p2.x) * SCREEN_W}
+                  y2={p2.y * SCREEN_H}
+                  stroke={isCorrect ? "#52B788" : "#E63946"} // Xanh nếu đúng form, Đỏ nếu sai form
+                  strokeWidth="4"
+                  strokeOpacity={0.8}
+                />
+              );
+            })}
+          </Svg>
+        )}
 
         {/* 3. Landmarks Dots - Các điểm bám theo người */}
         {landmarks.length > 0 && animatedPoints.map((anim, index) => (
