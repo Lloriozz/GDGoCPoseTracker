@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   assistantBubble: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: '#1C1C1E',
     borderBottomLeftRadius: 8,
   },
   text: {
@@ -49,10 +49,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   userText: {
-    color: theme.colors.white,
+    color: '#FFF',
   },
   assistantText: {
-    color: theme.colors.text,
+    color: '#FFF',
   },
   meta: {
     marginTop: 4,

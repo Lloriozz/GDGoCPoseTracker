@@ -14,13 +14,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { forumAPI } from '../../services/forum';
 import { mediaAPI } from '../../services/media';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_BASE_URL } from '../../config/api';
 
-const PRIMARY = '#FF7A22';
+const PRIMARY = '#FF5E0E';
 
 export default function ForumScreen() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -173,11 +174,11 @@ export default function ForumScreen() {
             activeOpacity={0.7}
             onPress={() => router.push(`/post/${item.id}` as any)}
           >
-            <Ionicons name="chatbubble-outline" size={22} color="#000" />
+            <Ionicons name="chatbubble-outline" size={22} color="#FFF" />
             <Text style={styles.statText}>{item.comments?.length || 0}</Text>
           </TouchableOpacity>
           <TouchableOpacity key="likes" style={styles.statItem} activeOpacity={0.7}>
-            <Ionicons name="heart-outline" size={24} color="#000" />
+            <Ionicons name="heart-outline" size={24} color="#FFF" />
             <Text style={styles.statText}>{item.likes || 0}</Text>
           </TouchableOpacity>
         </View>
@@ -188,6 +189,11 @@ export default function ForumScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.safe}>
+        <LinearGradient
+          colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+          locations={[0, 0.35, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY} />
         </View>
@@ -197,6 +203,11 @@ export default function ForumScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <LinearGradient
+        colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
       <FlatList
         data={posts}
         keyExtractor={(item, index) => item.id || `post-${index}`}
@@ -225,18 +236,18 @@ export default function ForumScreen() {
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              style={styles.titleInput}
-              placeholder="Title"
-              placeholderTextColor="#888"
-              value={newPostTitle}
-              onChangeText={setNewPostTitle}
+              <TextInput
+                style={styles.titleInput}
+                placeholder="Title"
+                placeholderTextColor="#A1A1A1"
+                value={newPostTitle}
+                onChangeText={setNewPostTitle}
             />
 
             <TextInput
               style={styles.contentInput}
               placeholder="What's on your mind?"
-              placeholderTextColor="#888"
+              placeholderTextColor="#A1A1A1"
               value={newPostContent}
               onChangeText={setNewPostContent}
               multiline
@@ -276,7 +287,7 @@ export default function ForumScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
   },
   headerContainer: {
     marginBottom: 8,
@@ -295,19 +306,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -4,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
     borderRadius: 10,
     width: 18,
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#e0e0e0',
+    borderColor: '#333',
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#000',
+    color: '#FFF',
   },
   createPostContainer: {
     flexDirection: 'row',
@@ -315,7 +326,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#333',
     paddingBottom: 30, // give some breathing room
   },
   myAvatar: {
@@ -326,19 +337,19 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
-    backgroundColor: '#F5F6F8',
+    backgroundColor: '#1C1C1E',
     borderRadius: 24,
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
   input: {
     fontSize: 16,
-    color: '#111',
+    color: '#FFF',
     fontWeight: '500',
   },
   inputPlaceholder: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
     fontWeight: '500',
   },
   postRow: {
@@ -346,14 +357,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ddd',
+    borderBottomColor: '#333',
   },
   postAvatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
     marginRight: 12,
-    backgroundColor: '#FF7A22',
+    backgroundColor: '#FF5E0E',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -373,16 +384,16 @@ const styles = StyleSheet.create({
   authorName: {
     fontWeight: '700',
     fontSize: 16,
-    color: '#000',
+    color: '#FFF',
     marginRight: 6,
   },
   authorHandle: {
     fontSize: 15,
-    color: '#555',
+    color: '#A1A1A1',
   },
   postText: {
     fontSize: 16,
-    color: '#111',
+    color: '#FFF',
     lineHeight: 22,
     fontWeight: '500',
   },
@@ -402,7 +413,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 280,
     borderRadius: 16,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#1C1C1E',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -417,7 +428,7 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#000',
+    color: '#FFF',
   },
   loadingContainer: {
     flex: 1,
@@ -432,11 +443,11 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
   },
   modalSafe: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
   },
   modalContent: {
     flex: 1,
@@ -449,41 +460,43 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#333',
   },
   modalCancel: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111',
+    color: '#FFF',
   },
   modalPost: {
     fontSize: 16,
-    color: '#FF7A22',
+    color: '#FF5E0E',
     fontWeight: '700',
   },
   titleInput: {
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#1C1C1E',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
     marginBottom: 16,
-    color: '#111',
+    color: '#FFF',
     fontWeight: '600',
   },
   contentInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#333',
+    backgroundColor: '#1C1C1E',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     minHeight: 120,
     marginBottom: 16,
+    color: '#FFF',
   },
   imagePreviewContainer: {
     position: 'relative',
@@ -516,11 +529,11 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#333',
     borderRadius: 8,
   },
   addImageText: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
   },
 });

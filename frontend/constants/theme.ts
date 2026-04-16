@@ -5,24 +5,24 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColorLight = '#FF5E0E';
+const tintColorDark = '#FF5E0E';
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: '#FFFFFF',
+    background: '#0F0F0F',
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: '#A1A1A1',
+    tabIconDefault: '#A1A1A1',
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: '#FFFFFF',
+    background: '#0F0F0F',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: '#A1A1A1',
+    tabIconDefault: '#A1A1A1',
     tabIconSelected: tintColorDark,
   },
 };
@@ -61,7 +61,7 @@ export const shadows = {
     elevation: 3,
   },
   medium: {
-    shadowColor: '#000',
+    shadowColor: '#FF5E0E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -71,14 +71,14 @@ export const shadows = {
 
 export const theme = {
   colors: {
-    primary: '#FF7A22',
-    primarySoft: '#FFF0E5',
+    primary: '#FF5E0E',
+    primarySoft: '#331B10',
     white: '#FFFFFF',
-    text: '#11181C',
-    muted: '#687076',
-    background: '#F8F9FA',
-    border: '#E5E7EB',
-    surface: '#F5F5F5',
+    text: '#FFFFFF',
+    muted: '#A1A1A1',
+    background: '#0F0F0F',
+    border: '#2C2C2E',
+    surface: '#1C1C1E',
   },
   radius: {
     round: 9999,

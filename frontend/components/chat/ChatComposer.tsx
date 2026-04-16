@@ -23,7 +23,7 @@ export function ChatComposer({ value, onChangeText, onSend, loading = false }: C
           value={value}
           onChangeText={onChangeText}
           placeholder="Hỏi ChatBot"
-          placeholderTextColor="#676767"
+          placeholderTextColor="#A1A1A1"
           style={styles.input}
           multiline
         />
@@ -33,7 +33,7 @@ export function ChatComposer({ value, onChangeText, onSend, loading = false }: C
           ) : canSend ? (
             <Ionicons name="send" size={22} color={theme.colors.primary} />
           ) : (
-            <Ionicons name="mic-outline" size={28} color="#383838" />
+            <Ionicons name="mic-outline" size={28} color="#A1A1A1" />
           )}
         </TouchableOpacity>
       </View>
@@ -48,16 +48,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 10,
-    backgroundColor: theme.colors.white,
+    backgroundColor: '#1C1C1E',
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: '#333',
     gap: 10,
   },
   sideButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#D9D9D9',
+    backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     maxHeight: 120,
     borderRadius: theme.radius.round,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#333',
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingLeft: 16,
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     fontSize: 18,
-    color: theme.colors.text,
+    color: '#FFF',
     maxHeight: 96,
   },
   trailingButton: {

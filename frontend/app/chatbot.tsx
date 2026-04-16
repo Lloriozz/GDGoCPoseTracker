@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { ChatBubble } from '../components/chat/ChatBubble';
 import { ChatComposer } from '../components/chat/ChatComposer';
 import { QuickActionButton } from '../components/chat/QuickActionButton';
+import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../constants/theme';
 import { sendChatMessage } from '../services/chat';
 import { ChatUiMessage } from '../types/chat';
@@ -101,6 +102,11 @@ export default function ChatbotScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <LinearGradient
+          colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+          locations={[0, 0.35, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <View style={styles.header}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => router.back()} style={styles.headerIcon}>
             <Ionicons name="arrow-back-outline" size={28} color={theme.colors.text} />
@@ -156,7 +162,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: 'transparent',
   },
   header: {
     height: 68,

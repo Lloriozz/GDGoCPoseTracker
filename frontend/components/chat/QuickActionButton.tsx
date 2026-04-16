@@ -18,14 +18,14 @@ export function QuickActionButton({ label, onPress }: QuickActionButtonProps) {
 const styles = StyleSheet.create({
   button: {
     alignSelf: 'flex-start',
-    backgroundColor: theme.colors.white,
+    backgroundColor: '#1C1C1E',
     borderRadius: theme.radius.round,
     paddingHorizontal: 20,
     paddingVertical: 14,
     marginBottom: 16,
   },
   label: {
-    color: '#333333',
+    color: '#FFF',
     fontSize: 18,
     fontWeight: '500',
   },

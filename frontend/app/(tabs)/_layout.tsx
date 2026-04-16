@@ -5,9 +5,7 @@ import {
   StyleSheet, Modal, Text,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-
-const PRIMARY = '#FF7A22';
-
+const PRIMARY = '#FF5E0E';
 type CenterBtnProps = { onPress?: () => void };
 
 function CenterButton({ onPress }: CenterBtnProps) {
@@ -61,7 +59,7 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: PRIMARY,
-          tabBarInactiveTintColor: '#aaa',
+          tabBarInactiveTintColor: '#A1A1A1',
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabLabel,
           headerShown: false,
@@ -161,12 +159,12 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     paddingTop: 8,
     borderTopWidth: 0,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.2,
         shadowRadius: 8,
       },
       android: { elevation: 8 },
@@ -195,7 +193,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: '#0F0F0F',
   },
   modalOverlay: {
     flex: 1,
@@ -203,7 +201,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     padding: 24,
@@ -224,12 +222,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111',
+    color: '#FFF',
     marginBottom: 6,
   },
   modalSubtitle: {
     fontSize: 15,
-    color: '#666',
+    color: '#A1A1A1',
   },
   grid: {
     flexDirection: 'row',
@@ -239,13 +237,13 @@ const styles = StyleSheet.create({
   },
   optionCard: {
     width: '47%',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#0F0F0F',
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -253,7 +251,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FFF0E5',
+    backgroundColor: '#331B10',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -261,6 +259,6 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#111',
+    color: '#FFF',
   },
 });
