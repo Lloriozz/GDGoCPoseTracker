@@ -32,9 +32,9 @@ class Settings:
     gemma_offload_buffers: bool = _env_bool("GEMMA_OFFLOAD_BUFFERS", True)
     gemma_gpu_memory_limit_mb: int = int(os.getenv("GEMMA_GPU_MEMORY_LIMIT_MB", "3500"))
     gemma_cpu_memory_limit_mb: int = int(os.getenv("GEMMA_CPU_MEMORY_LIMIT_MB", "16384"))
-    sqlite_path: str = os.getenv(
-        "SQLITE_PATH",
-        str(Path("data") / "fitness_chatbot.db"),
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:password@localhost:5432/PoseTracker",
     )
     kb_path: str = os.getenv(
         "KB_PATH",
