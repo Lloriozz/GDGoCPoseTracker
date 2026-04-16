@@ -7,7 +7,6 @@ import {
   TextInput, 
   TouchableOpacity, 
   FlatList,
-  Platform,
   ActivityIndicator,
   Alert,
   Modal
@@ -31,7 +30,6 @@ export default function ForumScreen() {
   const [newPostContent, setNewPostContent] = useState('');
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -75,7 +73,6 @@ export default function ForumScreen() {
       return;
     }
 
-    setIsUploading(true);
     try {
       // Create post first
       const response: any = await forumAPI.createPost(token, {
@@ -101,8 +98,6 @@ export default function ForumScreen() {
     } catch (error: any) {
       console.error('Failed to create post:', error);
       Alert.alert('Error', 'Failed to create post');
-    } finally {
-      setIsUploading(false);
     }
   };
 

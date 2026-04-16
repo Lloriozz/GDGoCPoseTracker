@@ -21,7 +21,7 @@ export default function SignupScreen() {
       Alert.alert('Success', 'Account created! Please sign in.', [
         { text: 'OK', onPress: () => router.replace('/login' as any) }
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert('Registration Failed', 'Could not create account');
     }
   };

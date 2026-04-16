@@ -18,7 +18,7 @@ export default function LoginScreen() {
     try {
       await login(email, password);
       router.replace('/(tabs)' as any);
-    } catch (error) {
+    } catch {
       Alert.alert('Login Failed', 'Invalid email or password');
     }
   };
@@ -59,7 +59,7 @@ export default function LoginScreen() {
         </Pressable>
 
         <Pressable onPress={() => router.push('/signup')}>
-          <Text style={styles.linkText}>Don't have an account? Sign up</Text>
+          <Text style={styles.linkText}>Don&apos;t have an account? Sign up</Text>
         </Pressable>
       </View>
     </SafeAreaView>

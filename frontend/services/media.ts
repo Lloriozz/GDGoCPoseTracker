@@ -1,5 +1,4 @@
 import { API_BASE_URL } from '../config/api';
-import { useAuth } from '../contexts/AuthContext';
 
 export const mediaAPI = {
   async uploadImage(

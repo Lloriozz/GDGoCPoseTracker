@@ -23,13 +23,12 @@ const PRIMARY = '#FF7A22';
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   
   const [post, setPost] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -48,6 +47,7 @@ export default function PostDetailScreen() {
 
   useEffect(() => {
     loadPost();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadPost = async () => {
