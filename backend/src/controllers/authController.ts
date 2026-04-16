@@ -5,7 +5,8 @@ import { generateToken, hashPassword, comparePassword } from '../utils/auth';
 // Register new user
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, username, password, firstName, lastName, bio } = req.body;
+    const { email, password, firstName, lastName, bio } = req.body;
+    const username = req.body.username || email.split('@')[0] + '_' + Date.now().toString().slice(-4);
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
