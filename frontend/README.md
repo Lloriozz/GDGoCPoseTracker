@@ -16,6 +16,20 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+3. Configure the online pose backend
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Set `EXPO_PUBLIC_POSE_API_BASE_URL` to your deployed Django pose API, for example `https://your-domain.com`.
+
+4. Start Expo in QR-friendly mode
+
+   ```bash
+   npx expo start --tunnel
+   ```
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
