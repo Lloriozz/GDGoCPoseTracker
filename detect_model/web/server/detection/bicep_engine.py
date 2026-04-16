@@ -43,7 +43,42 @@ class BicepCoachEngine:
         return abs(ang) if abs(ang) <= 180 else 360 - abs(ang)
 
     def process_frame(self, landmarks):
-        # 1. TRÍCH XUẤT ĐIỂM VÀ DỰ ĐOÁN LỖI NGẢ LƯNG BẰNG ML MODEL
+        # Lấy tọa độ 2 tay trước để làm Gatekeeper
+        L_sh, L_el, L_wr = landmarks[11], landmarks[13], landmarks[15]
+        R_sh, R_el, R_wr = landmarks[12], landmarks[14], landmarks[16]
+        total_reps = self.arms["Trái"]["counter"] + self.arms["Phải"]["counter"]
+
+        # ==========================================
+        # GATEKEEPER 1: VISIBILITY (Bước ra khỏi camera)
+        # ==========================================
+        avg_vis = sum([L_sh.visibility, L_el.visibility, L_wr.visibility, R_sh.visibility, R_el.visibility, R_wr.visibility]) / 6.0
+        if avg_vis < self.VIS_THRESH:
+            return {
+                "counter": total_reps,
+                "score": 0,
+                "is_correct": False,
+                "correction": "Vui lòng đứng trọn vẹn vào khung hình!"
+            }
+
+        # ==========================================
+        # GATEKEEPER 2: IDLE STATE (Đang đứng yên, chưa tập)
+        # ==========================================
+        l_angle = self._calc_angle(L_sh, L_el, L_wr)
+        r_angle = self._calc_angle(R_sh, R_el, R_wr)
+
+        # Nếu cả 2 tay đều duỗi (góc > 150) -> Người dùng đang đứng chờ, không đánh giá ML.
+        if l_angle > 150 and r_angle > 150:
+            return {
+                "counter": total_reps,
+                "score": 100,
+                "is_correct": True,
+                "correction": "Sẵn sàng? Hãy gập tạ lên nào!"
+            }
+
+        # ==========================================
+        # GIAI ĐOẠN 3: ML MODEL ĐÁNH GIÁ LỖI NGẢ LƯNG
+        # (Chỉ chạy khi tay bắt đầu gập < 150 độ)
+        # ==========================================
         row = []
         for idx in self.IMPORTANT_LMS:
             lm = landmarks[idx]
@@ -63,23 +98,17 @@ class BicepCoachEngine:
             feedback.append("Đừng ngả người ra sau!")
             is_correct = False
 
-        # 2. PHÂN TÍCH CHUYỂN ĐỘNG 2 CÁNH TAY BẰNG TOÁN HỌC
-        L_sh, L_el, L_wr = landmarks[11], landmarks[13], landmarks[15]
-        R_sh, R_el, R_wr = landmarks[12], landmarks[14], landmarks[16]
-
+        # ==========================================
+        # GIAI ĐOẠN 4: TOÁN HỌC ĐÁNH GIÁ TỪNG TAY BICEP
+        # ==========================================
         class Point: # Tạo class phụ để tính góc với mặt đất (trục Y)
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
 
-        def analyze_arm(sh, el, wr, side_name):
-            # Lọc nhiễu: Nếu không thấy rõ tay thì bỏ qua
-            if sh.visibility < self.VIS_THRESH or el.visibility < self.VIS_THRESH or wr.visibility < self.VIS_THRESH:
-                return False
-
+        def analyze_arm(sh, el, wr, curl_angle, side_name):
             arm_err = False
             state = self.arms[side_name]
-            curl_angle = self._calc_angle(sh, el, wr)
 
             # Logic đếm Rep và kiểm tra Peak Contraction (Siết cơ)
             if curl_angle > self.STAGE_DOWN_THRESHOLD:
@@ -110,15 +139,15 @@ class BicepCoachEngine:
             return arm_err
 
         # Phân tích tay trái và tay phải
-        l_err = analyze_arm(L_sh, L_el, L_wr, "Trái")
-        r_err = analyze_arm(R_sh, R_el, R_wr, "Phải")
+        l_err = analyze_arm(L_sh, L_el, L_wr, l_angle, "Trái")
+        r_err = analyze_arm(R_sh, R_el, R_wr, r_angle, "Phải")
 
         if l_err or r_err:
             is_correct = False
 
-        # 3. TỔNG HỢP KẾT QUẢ GỬI VỀ MOBILE
+        # 5. TỔNG HỢP KẾT QUẢ GỬI VỀ MOBILE
         total_reps = self.arms["Trái"]["counter"] + self.arms["Phải"]["counter"]
-        correction_text = " - ".join(feedback) if feedback else "Form tay rất nét!"
+        correction_text = " - ".join(feedback) if feedback else "Form rất nét, tiếp tục!"
 
         return {
             "counter": total_reps,
