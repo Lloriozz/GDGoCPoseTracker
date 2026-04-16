@@ -21,7 +21,7 @@ if ([string]::IsNullOrWhiteSpace($ModelId)) {
     }
 }
 
-$env:LLM_BACKEND = "local-transformers"
+$env:LLM_BACKEND = "mock-gemma"
 $env:GEMMA_MODEL_ID = $ModelId
 $env:GEMMA_DEVICE = $Device
 $env:GEMMA_QUANTIZATION = $Quantization
@@ -48,4 +48,4 @@ Write-Host "PORT=$Port"
 Write-Host ""
 Write-Host "Starting uvicorn with local Gemma backend..."
 
-uvicorn app.main:app --reload --port $Port
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port $Port

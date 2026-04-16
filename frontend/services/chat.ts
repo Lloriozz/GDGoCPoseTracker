@@ -1,11 +1,11 @@
-import { API_BASE_URL } from '../config/api';
+import { CHAT_API_BASE_URL } from '../config/api';
 import { ChatApiRequest, ChatApiResponse } from '../types/chat';
 
 export async function sendChatMessage(payload: ChatApiRequest): Promise<ChatApiResponse> {
   let response: Response;
 
   try {
-    response = await fetch(`${API_BASE_URL}/chat`, {
+    response = await fetch(`${CHAT_API_BASE_URL}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -19,7 +19,7 @@ export async function sendChatMessage(payload: ChatApiRequest): Promise<ChatApiR
         : 'Failed to fetch';
 
     throw new Error(
-      `Không gọi được backend tại ${API_BASE_URL}/chat. ` +
+      `Không gọi được backend tại ${CHAT_API_BASE_URL}/chat. ` +
       `Hãy kiểm tra backend đã chạy ở cổng 8000 chưa và có cho phép CORS chưa. Chi tiết: ${message}`
     );
   }

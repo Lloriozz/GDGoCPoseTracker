@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { PlaceholderScreen } from '@/components/shared/PlaceholderScreen';
 
 const PRIMARY = '#FF7A22';
 
@@ -53,17 +55,6 @@ const MOCK_MESSAGES = [
     time: "09:42 AM",
   }
 ];
-
-export default function ChatTabScreen() {
-  return (
-    <PlaceholderScreen
-      title="Chat"
-      description="Luồng chatbot chính đã được tách thành screen riêng theo Figma. Bạn có thể mở từ nút PT nổi ở Home hoặc từ đây."
-      actionLabel="Open ChatBot"
-      onAction={() => router.push('/chatbot')}
-    />
-  );
-}
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState(MOCK_MESSAGES);
@@ -139,9 +130,6 @@ export default function ChatScreen() {
 
         {/* Input Area */}
         <View style={styles.inputWrapper}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <Ionicons name="add" size={28} color="#888" />
-          </TouchableOpacity>
           <TextInput 
             style={styles.textInput}
             placeholder="Type a message..."
