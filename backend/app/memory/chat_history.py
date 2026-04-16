@@ -14,16 +14,18 @@ class ChatHistoryStore:
 
     def get_messages(self, session_id: str) -> list[dict[str, str]]:
         with get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT user_message, assistant_message
-                FROM chat_turns
-                WHERE session_id = ?
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                (session_id, self.max_messages),
-            ).fetchall()
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT user_message, assistant_message
+                    FROM chat_turns
+                    WHERE session_id = %s
+                    ORDER BY id DESC
+                    LIMIT %s
+                    """,
+                    (session_id, self.max_messages),
+                )
+                rows = cursor.fetchall()
 
         rows = list(reversed(rows))
         return [ChatTurn(**dict(row)).model_dump() for row in rows]
@@ -36,15 +38,16 @@ class ChatHistoryStore:
         assistant_message: str,
     ) -> None:
         with get_connection() as connection:
-            connection.execute(
-                """
-                INSERT INTO chat_turns (
-                    session_id,
-                    user_id,
-                    user_message,
-                    assistant_message
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO chat_turns (
+                        session_id,
+                        user_id,
+                        user_message,
+                        assistant_message
+                    )
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (session_id, user_id, user_message, assistant_message),
                 )
-                VALUES (?, ?, ?, ?)
-                """,
-                (session_id, user_id, user_message, assistant_message),
-            )
