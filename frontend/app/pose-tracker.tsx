@@ -172,7 +172,7 @@ export default function PoseTrackerScreen() {
         setIsConnected(true);
         setProgressLabel('Pose detected');
         setScore(payload.score ?? 0);
-        setRepCount(payload.rep_count ?? 0);
+        setRepCount(payload.counter ?? 0);
         setIsCorrect(nextCorrect);
         setCorrection(nextCorrection);
         setLandmarks(payload.landmarks);
