@@ -15,11 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
-import {
-  getPoseAnalyzeUrl,
-  getPoseCloseUrl,
-  POSE_API_BASE_URL,
-} from '../constants/api';
+import { POSE_API_BASE_URL } from '../constants/api'; // Chỉ cần giữ lại Base URL
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -32,8 +28,7 @@ const POSE_CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6],
 ];
 
-const CAPTURE_INTERVAL_MS = 180; 
-const ANIMATION_DURATION = 180; 
+const ANIMATION_DURATION = 80; // Giảm duration xuống để điểm chạy nhanh hơn, hợp với FPS cao
 const SPEECH_COOLDOWN_MS = 4000;
 const LANDMARK_VISIBILITY_THRESHOLD = 0.5;
 
@@ -46,10 +41,12 @@ export default function PoseTrackerScreen() {
   const cameraRef = useRef<CameraView>(null);
   const captureEnabledRef = useRef(false);
   const requestInFlightRef = useRef(false);
-  const sessionIdRef = useRef<string | null>(null);
   const lastSpokenAtRef = useRef(0);
+  
+  // Ống nước WebSocket
+  const ws = useRef<WebSocket | null>(null);
 
-  // Animated values để nội suy chuyển động (giúp điểm lướt mượt theo người)
+  // Animated values để nội suy chuyển động
   const animatedPoints = useRef(
     Array.from({ length: 33 }, () => new Animated.ValueXY({ x: -100, y: -100 }))
   ).current;
@@ -62,16 +59,11 @@ export default function PoseTrackerScreen() {
   const [isCorrect, setIsCorrect] = useState(true);
   const [progressLabel, setProgressLabel] = useState('Preparing camera...');
 
-  // --- HÀM CẬP NHẬT ĐIỂM (CHÌA KHÓA ĐỂ ĐIỂM BÁM NGƯỜI) ---
+  // --- HÀM CẬP NHẬT ĐIỂM MƯỢT MÀ ---
   const updatePointsSmoothly = useCallback((newLandmarks: any[]) => {
     const animations = newLandmarks.map((lp, i) => {
       if (lp.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
       
-      /**
-       * GIẢI THÍCH MAPPING:
-       * point.x/y từ AI là 0 -> 1 (tỉ lệ so với bức ảnh)
-       * Khi dùng camera trước (facing front), ảnh bị ngược, nên x = (1 - lp.x)
-       */
       const targetX = (1 - lp.x) * SCREEN_W;
       const targetY = lp.y * SCREEN_H;
 
@@ -85,29 +77,12 @@ export default function PoseTrackerScreen() {
     Animated.parallel(animations as any).start();
   }, [animatedPoints]);
 
-  const closeSession = useCallback(async () => {
-    if (!sessionIdRef.current) {
-      return;
-    }
-
-    try {
-      await fetch(getPoseCloseUrl(sessionIdRef.current), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionIdRef.current }),
-      });
-    } catch {
-    } finally {
-      sessionIdRef.current = null;
-    }
-  }, []);
-
   const handleBack = useCallback(() => {
     captureEnabledRef.current = false;
     Speech.stop();
-    void closeSession();
+    ws.current?.close(); // Đóng socket khi back ra ngoài
     router.back();
-  }, [closeSession, router]);
+  }, [router]);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -115,107 +90,115 @@ export default function PoseTrackerScreen() {
     }
   }, [permission?.granted, requestPermission]);
 
+  // --- HÀM BƠM ẢNH VÀO WEBSOCKET ---
   const captureAndAnalyzeFrame = useCallback(async () => {
     if (!captureEnabledRef.current || requestInFlightRef.current) return;
-    if (!cameraRef.current) return;
-    if (!POSE_API_BASE_URL) {
-      setIsConnected(false);
-      setProgressLabel('Backend URL missing');
-      setCorrection('Set EXPO_PUBLIC_POSE_API_BASE_URL to connect to the pose backend.');
+    if (!cameraRef.current || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      // Nếu socket chưa mở, chờ 100ms rồi thử lại
+      if (captureEnabledRef.current) setTimeout(captureAndAnalyzeFrame, 100);
       return;
     }
 
-    requestInFlightRef.current = true;
+    requestInFlightRef.current = true; // Khóa không cho chụp frame mới khi frame cũ chưa xử lý xong
 
     try {
-      setProgressLabel('Capturing frame...');
+      setProgressLabel('Streaming...');
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.15,
+        quality: 0.1, // Nén tối đa để truyền siêu nhanh
         base64: true,
         skipProcessing: true,
         exif: false,
         shutterSound: false,
       });
 
-      if (!photo?.base64) throw new Error('No photo captured');
-
-      const apiUrl = getPoseAnalyzeUrl(exercise, sessionIdRef.current ?? undefined);
-      console.log('[PoseTracker] Sending request to:', apiUrl);
-      setProgressLabel('Analyzing pose...');
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frame: photo.base64 }),
-      });
-
-      console.log('[PoseTracker] Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[PoseTracker] Error response:', errorText);
-        throw new Error(`Server error ${response.status}: ${errorText}`);
+      if (photo?.base64) {
+        // Gửi qua WebSocket
+        ws.current.send(JSON.stringify({ frame: photo.base64 }));
+        // LƯU Ý: Không set requestInFlightRef = false ở đây. 
+        // Ta sẽ mở khóa nó ở onmessage (Khi server đã trả lời xong)
+      } else {
+        requestInFlightRef.current = false;
+        setTimeout(captureAndAnalyzeFrame, 30);
       }
+    } catch (e) {
+      console.error('[Camera] Error:', e);
+      requestInFlightRef.current = false;
+      setTimeout(captureAndAnalyzeFrame, 100);
+    }
+  }, []);
 
-      const payload = await response.json();
-      console.log('[PoseTracker] Payload type:', payload.type, 'landmarks:', payload.landmarks?.length);
+  // --- QUẢN LÝ KẾT NỐI WEBSOCKET ---
+  useEffect(() => {
+    if (!permission?.granted || !POSE_API_BASE_URL) return;
 
-      if (payload.type === 'no_detection') {
-        setIsConnected(true);
+    // Chuyển đổi http:// thành ws://
+    const wsUrl = POSE_API_BASE_URL.replace(/^http/, 'ws') + '/ws/pose/';
+    console.log('[WS] Connecting to:', wsUrl);
+    
+    ws.current = new WebSocket(wsUrl);
+
+    ws.current.onopen = () => {
+      console.log('[WS] Connected!');
+      setIsConnected(true);
+      setProgressLabel('Connected to Server');
+      captureEnabledRef.current = true;
+      captureAndAnalyzeFrame(); // Bắt đầu vòng lặp Real-time
+    };
+
+    ws.current.onmessage = (e) => {
+      // Nhận được kết quả -> Mở khóa Camera để chụp frame tiếp theo lập tức
+      requestInFlightRef.current = false; 
+
+      const payload = JSON.parse(e.data);
+
+      if (payload.type === 'no_detection' || payload.correction === 'Vui lòng đứng trọn vẹn vào khung hình!') {
         setProgressLabel('No pose detected');
-        setCorrection(payload.correction || payload.message || 'Step into frame');
+        setCorrection(payload.correction || 'Step into frame');
         setLandmarks([]);
-      } else if (payload.landmarks && Array.isArray(payload.landmarks)) {
-        sessionIdRef.current = payload.session_id ?? sessionIdRef.current;
-        const nextCorrect = payload.is_correct ?? true;
-        const nextCorrection = payload.correction || 'Keep going!';
-
-        setIsConnected(true);
+      } else if (payload.landmarks) {
         setProgressLabel('Pose detected');
         setScore(payload.score ?? 0);
-        setRepCount(payload.counter ?? 0);
-        setIsCorrect(nextCorrect);
-        setCorrection(nextCorrection);
+        setRepCount(payload.counter ?? 0); // Đã đồng bộ chữ "counter" với Backend
+        setIsCorrect(payload.is_correct ?? true);
+        setCorrection(payload.correction);
         setLandmarks(payload.landmarks);
 
-        if (!nextCorrect && nextCorrection) {
+        if (!payload.is_correct && payload.correction) {
           const now = Date.now();
           if (now - lastSpokenAtRef.current > SPEECH_COOLDOWN_MS) {
             lastSpokenAtRef.current = now;
-            Speech.speak(nextCorrection, { language: 'en-US', rate: 0.95 });
+            Speech.speak(payload.correction, { language: 'vi-VN', rate: 1.0 });
           }
         }
         
         updatePointsSmoothly(payload.landmarks);
-      } else {
-        console.warn('[PoseTracker] Unexpected payload format:', payload);
-        setProgressLabel('Unexpected server response');
-        setCorrection('Unexpected response from server');
       }
-    } catch (e) {
-      console.error('[PoseTracker] Error:', e);
-      setIsConnected(false);
-      setProgressLabel('Connection failed');
-      setCorrection(`Connection error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    } finally {
-      requestInFlightRef.current = false;
-      if (captureEnabledRef.current) {
-        setTimeout(captureAndAnalyzeFrame, CAPTURE_INTERVAL_MS);
-      }
-    }
-  }, [exercise, updatePointsSmoothly]);
 
-  useEffect(() => {
-    if (permission?.granted && POSE_API_BASE_URL) {
-      captureEnabledRef.current = true;
-      void captureAndAnalyzeFrame();
-    }
+      // Kích hoạt loop chụp ảnh ngay lập tức
+      if (captureEnabledRef.current) {
+        setTimeout(captureAndAnalyzeFrame, 20); // Delay 20ms để máy thở một chút
+      }
+    };
+
+    ws.current.onerror = (e) => {
+      console.error('[WS] Error:', e);
+      setIsConnected(false);
+      setProgressLabel('Connection Lost');
+      requestInFlightRef.current = false; // Mở khóa để thử lại
+    };
+
+    ws.current.onclose = () => {
+      console.log('[WS] Closed');
+      setIsConnected(false);
+      setProgressLabel('Disconnected');
+    };
+
     return () => {
       captureEnabledRef.current = false;
+      ws.current?.close();
       Speech.stop();
-      void closeSession();
     };
-  }, [captureAndAnalyzeFrame, closeSession, permission?.granted]);
+  }, [permission?.granted, captureAndAnalyzeFrame]);
 
   return (
     <View style={styles.container}>
@@ -228,17 +211,15 @@ export default function PoseTrackerScreen() {
         facing="front" 
       />
 
-      {/* 2. Skeleton Layer (ĐÃ THÊM ĐƯỜNG NỐI SVG) */}
+      {/* 2. Skeleton Layer (Vẽ đường nối SVG) */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         
-        {/* Vẽ đường thẳng nối các khớp */}
         {landmarks.length > 0 && (
           <Svg style={StyleSheet.absoluteFill}>
             {POSE_CONNECTIONS.map(([start, end], i) => {
               const p1 = landmarks[start];
               const p2 = landmarks[end];
               
-              // Nếu điểm bị khuất thì không vẽ đường nối
               if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) {
                 return null;
               }
@@ -250,7 +231,7 @@ export default function PoseTrackerScreen() {
                   y1={p1.y * SCREEN_H}
                   x2={(1 - p2.x) * SCREEN_W}
                   y2={p2.y * SCREEN_H}
-                  stroke={isCorrect ? "#52B788" : "#E63946"} // Xanh nếu đúng form, Đỏ nếu sai form
+                  stroke={isCorrect ? "#52B788" : "#E63946"}
                   strokeWidth="4"
                   strokeOpacity={0.8}
                 />
@@ -259,7 +240,7 @@ export default function PoseTrackerScreen() {
           </Svg>
         )}
 
-        {/* 3. Landmarks Dots - Các điểm bám theo người */}
+        {/* 3. Landmarks Dots (Các điểm bám theo người) */}
         {landmarks.length > 0 && animatedPoints.map((anim, index) => (
           <Animated.View
             key={`joint-${index}`}
@@ -269,7 +250,7 @@ export default function PoseTrackerScreen() {
                 backgroundColor: isCorrect ? '#52B788' : '#E63946',
                 borderColor: 'white',
                 borderWidth: 1,
-                width: index > 10 ? 8 : 4, // Điểm thân to hơn điểm mặt
+                width: index > 10 ? 8 : 4,
                 height: index > 10 ? 8 : 4,
                 transform: anim.getTranslateTransform(),
               },
@@ -298,7 +279,7 @@ export default function PoseTrackerScreen() {
 
         <View style={styles.footer}>
           <View style={[styles.banner, { borderLeftColor: isCorrect ? '#52B788' : '#E63946' }]}>
-            <Text style={styles.correctionText}>{correction || 'Detecting Pose...'}</Text>
+            <Text style={styles.correctionText}>{correction || 'Đang kết nối AI...'}</Text>
           </View>
         </View>
       </SafeAreaView>
