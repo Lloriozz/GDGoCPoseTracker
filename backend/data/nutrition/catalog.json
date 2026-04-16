@@ -1,0 +1,169 @@
+{
+  "foods": [
+    {
+      "id": "chicken_breast_raw",
+      "display_name": "Uc ga song",
+      "per_100g": {
+        "calories": 120,
+        "protein_g": 22.5,
+        "carb_g": 0,
+        "fat_g": 2.6
+      }
+    },
+    {
+      "id": "white_rice_raw",
+      "display_name": "Gao trang song",
+      "per_100g": {
+        "calories": 360,
+        "protein_g": 6.8,
+        "carb_g": 79.3,
+        "fat_g": 0.6
+      }
+    },
+    {
+      "id": "egg_whole_raw",
+      "display_name": "Trung ga",
+      "per_100g": {
+        "calories": 143,
+        "protein_g": 12.6,
+        "carb_g": 1.1,
+        "fat_g": 9.5
+      }
+    },
+    {
+      "id": "olive_oil",
+      "display_name": "Dau olive",
+      "per_100g": {
+        "calories": 884,
+        "protein_g": 0,
+        "carb_g": 0,
+        "fat_g": 100
+      },
+      "density_g_per_ml": 0.92
+    },
+    {
+      "id": "white_rice_cooked",
+      "display_name": "Com trang chin",
+      "per_100g": {
+        "calories": 130,
+        "protein_g": 2.7,
+        "carb_g": 28.2,
+        "fat_g": 0.3
+      }
+    },
+    {
+      "id": "pho_bo_generic",
+      "display_name": "Pho bo",
+      "per_100g": {
+        "calories": 0,
+        "protein_g": 0,
+        "carb_g": 0,
+        "fat_g": 0
+      },
+      "generic": true
+    },
+    {
+      "id": "beef_generic_raw",
+      "display_name": "Thit bo song",
+      "per_100g": {
+        "calories": 176,
+        "protein_g": 20.5,
+        "carb_g": 0,
+        "fat_g": 10.2
+      },
+      "generic": true
+    },
+    {
+      "id": "white_fish_generic_raw",
+      "display_name": "Ca trang song",
+      "per_100g": {
+        "calories": 110,
+        "protein_g": 22,
+        "carb_g": 0,
+        "fat_g": 1.8
+      },
+      "generic": true
+    },
+    {
+      "id": "leafy_greens_raw",
+      "display_name": "Rau xanh",
+      "per_100g": {
+        "calories": 25,
+        "protein_g": 2,
+        "carb_g": 4,
+        "fat_g": 0.3
+      },
+      "generic": true
+    }
+  ],
+  "aliases": [
+    { "alias": "uc ga", "food_id": "chicken_breast_raw" },
+    { "alias": "thit uc ga", "food_id": "chicken_breast_raw" },
+    { "alias": "uc ga song", "food_id": "chicken_breast_raw" },
+    { "alias": "gao song", "food_id": "white_rice_raw" },
+    { "alias": "gao trang song", "food_id": "white_rice_raw" },
+    { "alias": "trung", "food_id": "egg_whole_raw" },
+    { "alias": "trung ga", "food_id": "egg_whole_raw" },
+    { "alias": "qua trung", "food_id": "egg_whole_raw" },
+    { "alias": "dau olive", "food_id": "olive_oil" },
+    { "alias": "olive oil", "food_id": "olive_oil" },
+    { "alias": "com", "food_id": "white_rice_cooked" },
+    { "alias": "com trang", "food_id": "white_rice_cooked" },
+    { "alias": "com chin", "food_id": "white_rice_cooked" },
+    { "alias": "pho bo", "food_id": "pho_bo_generic" },
+    { "alias": "pho", "food_id": "pho_bo_generic" },
+    { "alias": "thit bo", "food_id": "beef_generic_raw" },
+    { "alias": "thit bo song", "food_id": "beef_generic_raw" },
+    { "alias": "ca trang", "food_id": "white_fish_generic_raw" },
+    { "alias": "ca trang song", "food_id": "white_fish_generic_raw" },
+    { "alias": "rau xanh", "food_id": "leafy_greens_raw" },
+    { "alias": "rau la", "food_id": "leafy_greens_raw" }
+  ],
+  "unit_conversions": [
+    { "food_id": "egg_whole_raw", "unit": "qua", "grams": 50 },
+    { "food_id": "olive_oil", "unit": "ml", "grams": 0.92 }
+  ],
+  "portion_templates": [
+    {
+      "food_id": "white_rice_cooked",
+      "unit": "bat",
+      "display_label": "1 bat",
+      "grams": 160,
+      "assumption": "Mac dinh 1 bat com trang chin khoang 160g."
+    },
+    {
+      "food_id": "white_rice_cooked",
+      "unit": "chen",
+      "display_label": "1 chen",
+      "grams": 120,
+      "assumption": "Mac dinh 1 chen com trang chin khoang 120g."
+    },
+    {
+      "food_id": "olive_oil",
+      "unit": "muong",
+      "display_label": "1 muong",
+      "grams": 13.8,
+      "assumption": "Mac dinh 1 muong dau olive khoang 15 ml."
+    },
+    {
+      "food_id": "pho_bo_generic",
+      "unit": "to",
+      "display_label": "1 to",
+      "calories": 480,
+      "protein_g": 28,
+      "carb_g": 55,
+      "fat_g": 16,
+      "assumption": "Mac dinh 1 to pho bo pho bien."
+    },
+    {
+      "food_id": "pho_bo_generic",
+      "unit": "phan",
+      "display_label": "1 phan",
+      "calories": 480,
+      "protein_g": 28,
+      "carb_g": 55,
+      "fat_g": 16,
+      "assumption": "Mac dinh 1 phan pho bo pho bien."
+    }
+  ]
+}
