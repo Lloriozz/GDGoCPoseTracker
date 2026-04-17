@@ -34,7 +34,7 @@ class Settings:
     gemma_cpu_memory_limit_mb: int = int(os.getenv("GEMMA_CPU_MEMORY_LIMIT_MB", "16384"))
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:password@localhost:5432/PoseTracker",
+        "postgresql://postgres:Duy1805@localhost:5432/PoseTracker",
     )
     kb_path: str = os.getenv(
         "KB_PATH",

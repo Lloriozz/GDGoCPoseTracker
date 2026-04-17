@@ -109,7 +109,7 @@ Ví dụ request:
 - `routes/chat.py`: nhận request
 - `core/orchestrator.py`: điều phối intent, slot filling, safety, tool call
 - `memory/`: lưu profile và chat history trong RAM
-- `db/database.py`: khoi tao SQLite va tao bang memory
+- `db/database.py`: khoi tao PostgreSQL va tao bang memory
 - `tools/tdee.py`: tool tính TDEE mẫu
 - `llm/mock_gemma.py`: mock Gemma de giu app chay on dinh
 - `llm/gemma_local.py`: local backend skeleton cho Gemma that
@@ -117,7 +117,7 @@ Ví dụ request:
 
 ## Bước tiếp theo nên làm
 
-- Mo rong memory SQLite thanh session store day du
+- Mo rong memory PostgreSQL thanh session store day du
 - Thêm workout tool, macro tool, meal plan tool
 - Thêm prompt template rõ hơn
 - Nối Gemma thật qua Transformers hoặc inference server

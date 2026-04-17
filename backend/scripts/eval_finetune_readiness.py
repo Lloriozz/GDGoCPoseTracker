@@ -521,10 +521,8 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"fine_tune_eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    original_sqlite_path = settings.sqlite_path
 
     try:
-        settings.sqlite_path = str(temp_dir / "eval.db")
         build_llm_backend.cache_clear()
         init_db()
 
@@ -585,9 +583,8 @@ def run_eval() -> int:
         _safe_print("Recommendation: " + _recommend_next_step(results))
         return 0 if total_passed == len(results) else 1
     finally:
-        settings.sqlite_path = original_sqlite_path
         build_llm_backend.cache_clear()
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(temp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":

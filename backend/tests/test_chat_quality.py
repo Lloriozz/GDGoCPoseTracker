@@ -22,14 +22,12 @@ class ChatQualityTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls._original_sqlite_path = settings.sqlite_path
         cls._original_llm_backend = settings.llm_backend
         cls._original_rag_enabled = settings.rag_enabled
         cls._temp_root.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        settings.sqlite_path = cls._original_sqlite_path
         settings.llm_backend = cls._original_llm_backend
         settings.rag_enabled = cls._original_rag_enabled
         build_llm_backend.cache_clear()
@@ -37,7 +35,6 @@ class ChatQualityTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = self._temp_root / f"case_{uuid4().hex}"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        settings.sqlite_path = str(self.temp_dir / "test.db")
         settings.llm_backend = "mock-gemma"
         settings.rag_enabled = True
         build_llm_backend.cache_clear()

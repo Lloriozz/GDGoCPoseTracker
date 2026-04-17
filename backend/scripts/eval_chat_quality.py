@@ -27,11 +27,9 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    original_sqlite_path = settings.sqlite_path
     original_llm_backend = settings.llm_backend
 
     try:
-        settings.sqlite_path = str(temp_dir / "eval.db")
         settings.llm_backend = "mock-gemma"
         build_llm_backend.cache_clear()
         init_db()
@@ -154,7 +152,6 @@ def run_eval() -> int:
         _safe_print(f"\nSummary: {passed}/{len(cases)} checks passed")
         return 0 if passed == len(cases) else 1
     finally:
-        settings.sqlite_path = original_sqlite_path
         settings.llm_backend = original_llm_backend
         build_llm_backend.cache_clear()
         shutil.rmtree(temp_dir, ignore_errors=True)
