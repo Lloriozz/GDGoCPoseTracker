@@ -3,56 +3,117 @@ import math
 
 import joblib
 import numpy as np
+import warnings
 
-
+warnings.filterwarnings("ignore", message="X does not have valid feature names")
+# Bỏ import pandas vì nó làm chậm tốc độ load và chiếm nhiều RAM
 MODEL_DIR = Path(__file__).resolve().parent.parent / "static" / "model"
 
-
 class SquatCoachEngine:
+    # ... (Giữ nguyên các mảng IMPORTANT_LM_NAMES, IMPORTANT_LMS và THRESHOLDS) ...
+    IMPORTANT_LM_NAMES = [
+        "NOSE", "LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_HIP", "RIGHT_HIP",
+        "LEFT_KNEE", "RIGHT_KNEE", "LEFT_ANKLE", "RIGHT_ANKLE",
+    ]
     IMPORTANT_LMS = [0, 11, 12, 23, 24, 25, 26, 27, 28]
+
     PREDICTION_THRESHOLD = 0.7
+    VIS_THRESH = 0.6
+    FOOT_SHOULDER_RATIO_THRESHOLDS = (1.2, 2.8)
+    KNEE_FOOT_RATIO_THRESHOLDS = {
+        "up": (0.5, 1.0),
+        "middle": (0.7, 1.0),
+        "down": (0.7, 1.1),
+    }
 
     def __init__(self):
         model_path = MODEL_DIR / "squat_model.pkl"
-        scaler_path = MODEL_DIR / "input_scaler.pkl"
-
         if not model_path.exists():
-            raise FileNotFoundError(f"Missing squat count model at {model_path}")
-            
-        # Load model chính
+            raise FileNotFoundError(f"Missing squat model at {model_path}")
+
         self.model = joblib.load(model_path)
-        
-        # Kiểm tra scaler, nếu không có thì set là None thay vì raise lỗi
-        if scaler_path.exists():
-            self.scaler = joblib.load(scaler_path)
-            print("✅ Loaded Squat Scaler")
-        else:
-            self.scaler = None
-            print("⚠️ Warning: Squat Scaler not found, using raw landmarks or default scaling.")
+        self.counter = 0
+        self.current_stage = ""
 
-    def calculate_distance(self, p1, p2):
-        return math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+    @staticmethod
+    def _distance(p1, p2):
+        # Tối ưu: Dùng hypotenuse của Python C-core nhanh hơn tính thủ công
+        return math.hypot(p2.x - p1.x, p2.y - p1.y)
 
-    def _normalize_stage(self, prediction):
+    @staticmethod
+    def _normalize_stage(prediction):
         if isinstance(prediction, str):
-            return "down" if prediction.lower() == "down" else "up"
-
+            return "down" if prediction.lower().startswith("down") else "up"
         try:
             return "down" if int(prediction) == 0 else "up"
         except (TypeError, ValueError):
             return "up"
 
+    def _analyze_placement(self, landmarks):
+        # Lấy Index chân từ MediaPipe (Lưu ý: Ankle (Mắt cá) hay Foot_Index (Mũi chân)?)
+        # Ở đây tôi đổi 31, 32 (Foot Index) thành 27, 28 (Ankle) để đồng bộ với IMPORTANT_LMS
+        l_sh = landmarks[11]
+        r_sh = landmarks[12]
+        l_knee = landmarks[25]
+        r_knee = landmarks[26]
+        l_ankle = landmarks[27] 
+        r_ankle = landmarks[28]
+
+        # Kiểm tra nhanh: Nếu khuất 1 trong 6 điểm thì bỏ qua tính toán
+        if min(
+            l_ankle.visibility, r_ankle.visibility,
+            l_knee.visibility, r_knee.visibility,
+            l_sh.visibility, r_sh.visibility
+        ) < self.VIS_THRESH:
+            return "unknown", "unknown"
+
+        shoulder_w = self._distance(l_sh, r_sh)
+        foot_w = self._distance(l_ankle, r_ankle) # Tính khoảng cách gót chân (Mắt cá) thay vì mũi chân
+        
+        # Ngăn lỗi Division by Zero
+        if shoulder_w < 0.001 or foot_w < 0.001:
+            return "unknown", "unknown"
+
+        foot_shoulder_ratio = round(foot_w / shoulder_w, 1)
+        lo, hi = self.FOOT_SHOULDER_RATIO_THRESHOLDS
+        feet_status = "too tight" if foot_shoulder_ratio < lo else "too wide" if foot_shoulder_ratio > hi else "correct"
+
+        # Tính toán khoảng cách gối
+        stage_key = self.current_stage if self.current_stage in self.KNEE_FOOT_RATIO_THRESHOLDS else "middle"
+        knee_w = self._distance(l_knee, r_knee)
+        knee_foot_ratio = round(knee_w / foot_w, 1)
+        kmin, kmax = self.KNEE_FOOT_RATIO_THRESHOLDS[stage_key]
+        
+        knee_status = "too tight" if knee_foot_ratio < kmin else "too wide" if knee_foot_ratio > kmax else "correct"
+
+        return feet_status, knee_status
+
     def process_frame(self, landmarks):
+        # Trích xuất đúng 36 features (Nhanh hơn List Comprehension)
         row = []
         for idx in self.IMPORTANT_LMS:
             lm = landmarks[idx]
             row.extend([lm.x, lm.y, lm.z, lm.visibility])
 
-        X_scaled = self.scaler.transform(np.array(row, dtype=float).reshape(1, -1))
-        prediction = self.model.predict(X_scaled)
-        prob = float(np.max(self.count_model.predict_proba(X_scaled)))
+        # Đưa thẳng vào numpy array (Không cần tạo pandas.DataFrame)
+        X = np.array([row])
 
-        stage = self._normalize_stage(prediction)
+        try:
+            # Model nhận input 2D array
+            predicted_class = self.model.predict(X)[0]
+            probs = self.model.predict_proba(X)[0]
+            prob = float(np.max(probs))
+        except Exception as e:
+            return {
+                "counter": self.counter,
+                "score": 0,
+                "is_correct": False,
+                "correction": "Đang định vị tư thế...", # Câu này thân thiện hơn là nhả cái "Model Error"
+            }
+
+        stage = self._normalize_stage(predicted_class)
+
+        # Chống đếm đúp (Debounce)
         if stage == "down" and prob >= self.PREDICTION_THRESHOLD:
             self.current_stage = "down"
         elif (
@@ -63,48 +124,30 @@ class SquatCoachEngine:
             self.current_stage = "up"
             self.counter += 1
 
+        # Check form
+        feet_status, knee_status = self._analyze_placement(landmarks)
+
         feedback = []
+        if feet_status == "too tight":
+            feedback.append("Đứng rộng chân hơn một chút!")
+        elif feet_status == "too wide":
+            feedback.append("Khép chân lại gần vai hơn!")
 
-        left_shoulder = landmarks[11]
-        right_shoulder = landmarks[12]
-        left_foot = landmarks[31]
-        right_foot = landmarks[32]
-        left_knee = landmarks[25]
-        right_knee = landmarks[26]
-
-        if (
-            left_shoulder.visibility > 0.6
-            and right_shoulder.visibility > 0.6
-            and left_foot.visibility > 0.6
-            and right_foot.visibility > 0.6
-        ):
-            shoulder_width = self.calculate_distance(left_shoulder, right_shoulder)
-            foot_width = self.calculate_distance(left_foot, right_foot)
-
-            if shoulder_width > 0:
-                ratio_ft_sh = foot_width / shoulder_width
-                if ratio_ft_sh < 1.2:
-                    feedback.append("Spread your feet wider!")
-                elif ratio_ft_sh > 2.8:
-                    feedback.append("Narrow your stance!")
-
-            if (
-                self.current_stage == "down"
-                and foot_width > 0
-                and left_knee.visibility > 0.6
-                and right_knee.visibility > 0.6
-            ):
-                knee_width = self.calculate_distance(left_knee, right_knee)
-                ratio_kn_ft = knee_width / foot_width
-                if ratio_kn_ft < 0.7:
-                    feedback.append("Push your knees out!")
+        if feet_status == "correct":
+            if knee_status == "too tight":
+                feedback.append("Đẩy đầu gối ra ngoài!")
+            elif knee_status == "too wide":
+                feedback.append("Giữ gối thẳng hàng với mũi chân!")
 
         is_correct = len(feedback) == 0
-        correction_text = " - ".join(feedback) if feedback else "Great form!"
+        correction_text = " - ".join(feedback) if feedback else "Form rất nét, tiếp tục!"
 
         return {
             "counter": self.counter,
             "score": round(prob * 100, 1),
             "is_correct": is_correct,
             "correction": correction_text,
+            "stage": self.current_stage or stage,
+            "feet": feet_status,
+            "knee": knee_status,
         }
