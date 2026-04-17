@@ -38,20 +38,20 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({ exercise, timeLeft }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 20,
     elevation: 5,
   },
   animationPlaceholder: {
     width: '100%',
     height: 200,
-    backgroundColor: '#F0F2F5',
+    backgroundColor: '#0F0F0F',
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
@@ -70,13 +70,13 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#111',
+    color: '#FFF',
     textAlign: 'center',
     marginBottom: 5,
   },
   description: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 15,
@@ -88,13 +88,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badge: {
-    backgroundColor: '#EAF0F6',
+    backgroundColor: '#331B10',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
   badgeText: {
-    color: '#4A6572',
+    color: '#FF5E0E',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',

@@ -7,7 +7,7 @@ import {
   View,
   StatusBar,
   Animated,
-  ScrollView,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -15,13 +15,6 @@ import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
-
-import {
-  getPoseAnalyzeUrl,
-  getPoseCloseUrl,
-  POSE_API_BASE_URL,
-} from '../constants/api';
-import { BicepEngine } from '../engines/BicepEngine';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -33,18 +26,12 @@ const POSE_CONNECTIONS = [
   [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6],
 ];
 
-const CAPTURE_INTERVAL_MS = 180;
-const ANIMATION_DURATION = 150;
 const SPEECH_COOLDOWN_MS = 4000;
 const LANDMARK_VISIBILITY_THRESHOLD = 0.5;
+const _WS_HOST = process.env.EXPO_PUBLIC_API_IP ?? '124.197.18.178';
+const WS_BASE_URL = `ws://${_WS_HOST}:8000/ws/pose`;
 
-// Kiểu dữ liệu cho Log
-interface LogEntry {
-  id: string;
-  time: string;
-  message: string;
-  type: 'info' | 'success' | 'error' | 'warning';
-}
+type SessionStatus = 'IDLE' | 'RUNNING' | 'PAUSED';
 
 export default function PoseTrackerScreen() {
   const router = useRouter();
@@ -54,45 +41,33 @@ export default function PoseTrackerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   
-  // Trạng thái phiên tập
-  const [sessionState, setSessionState] = useState<'idle' | 'running'>('idle');
-  const sessionStateRef = useRef<'idle' | 'running'>('idle'); // Dùng ref để bypass closure trong loop
-  
-  const requestInFlightRef = useRef(false);
-  const sessionIdRef = useRef<string | null>(null);
+  // Quản lý luồng mạng
+  const isProcessingRef = useRef(false);
+  const wsRef = useRef<WebSocket | null>(null);
   const lastSpokenAtRef = useRef(0);
-  const prevRepCountRef = useRef(0);
-  const prevCorrectionRef = useRef('');
 
-  // Hệ thống Logs
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const scrollViewRef = useRef<ScrollView>(null);
+  // Quản lý Trạng thái Session
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('IDLE');
+  const statusRef = useRef<SessionStatus>('IDLE'); // Dùng ref để xài trong hàm async
 
   const animatedPoints = useRef(
     Array.from({ length: 33 }, () => new Animated.ValueXY({ x: -100, y: -100 }))
   ).current;
 
-  // --- ON-DEVICE ENGINE (bicep_curl only) ---
-  // Instantiated once; persists across renders via ref
-  const engineRef = useRef(new BicepEngine());
-
+  // State giao diện
   const [isConnected, setIsConnected] = useState(false);
   const [landmarks, setLandmarks] = useState<any[]>([]);
-  const [correction, setCorrection] = useState('Nhấn BẮT ĐẦU để tập luyện');
   const [score, setScore] = useState(0);
   const [repCount, setRepCount] = useState(0);
   const [isCorrect, setIsCorrect] = useState(true);
+  
+  // Lịch sử Log (Lưu 3 dòng gần nhất)
+  const [logHistory, setLogHistory] = useState<string[]>(['Sẵn sàng bắt đầu!']);
 
-  // --- HÀM GHI LOG ---
-  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-    
-    setLogs((prev) => {
-      const newLogs = [...prev, { id: Date.now().toString() + Math.random(), time: timeStr, message, type }];
-      return newLogs.slice(-20); // Giữ tối đa 20 log gần nhất
-    });
-  }, []);
+  // Cập nhật ref mỗi khi state thay đổi để hàm capture nhận được
+  useEffect(() => {
+    statusRef.current = sessionStatus;
+  }, [sessionStatus]);
 
   const updatePointsSmoothly = useCallback((newLandmarks: any[]) => {
     const animations = newLandmarks.map((lp, i) => {
@@ -102,7 +77,7 @@ export default function PoseTrackerScreen() {
 
       return Animated.timing(animatedPoints[i], {
         toValue: { x: targetX, y: targetY },
-        duration: ANIMATION_DURATION,
+        duration: 100,
         useNativeDriver: true,
       });
     }).filter(Boolean);
@@ -110,283 +85,236 @@ export default function PoseTrackerScreen() {
     Animated.parallel(animations as any).start();
   }, [animatedPoints]);
 
-  const closeSession = useCallback(async () => {
-    if (!sessionIdRef.current) return;
-    try {
-      await fetch(getPoseCloseUrl(sessionIdRef.current), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionIdRef.current }),
-      });
-      addLog('Đã lưu kết quả bài tập.', 'info');
-    } catch {
-    } finally {
-      sessionIdRef.current = null;
-    }
-  }, [addLog]);
-
-  // --- CONTROL BUTTONS ---
-  const toggleSession = () => {
-    if (sessionState === 'idle') {
-      setSessionState('running');
-      sessionStateRef.current = 'running';
-      setCorrection('Đang phân tích khung hình...');
-      addLog('🚀 Bắt đầu Session Tập Luyện', 'info');
-      captureAndAnalyzeFrame(); // Kích hoạt loop
-    } else {
-      setSessionState('idle');
-      sessionStateRef.current = 'idle';
-      setCorrection('Đã tạm dừng. Nhấn BẮT ĐẦU để tiếp tục.');
-      addLog('⏸ Đã tạm dừng Session', 'warning');
-      setLandmarks([]); // Xóa khung xương khi dừng
-    }
-  };
-
-  const handleExit = useCallback(() => {
-    setSessionState('idle');
-    sessionStateRef.current = 'idle';
+  const handleBack = useCallback(() => {
+    setSessionStatus('IDLE');
     Speech.stop();
-    void closeSession();
+    if (wsRef.current) wsRef.current.close();
     router.back();
-  }, [closeSession, router]);
+  }, [router]);
 
   useEffect(() => {
     if (!permission?.granted) void requestPermission();
     addLog('Hệ thống Camera đã sẵn sàng', 'info');
   }, [permission?.granted, requestPermission, addLog]);
 
-  // Load the on-device TFJS model once on mount (bicep_curl only)
+  // --- KẾT NỐI WEBSOCKET ---
   useEffect(() => {
-    if (exercise === 'bicep_curl') {
-      engineRef.current.loadModel().then(() => {
-        addLog('🤖 Mô hình AI On-Device đã sẵn sàng', 'success');
-      });
-    }
-  // Only run once on mount — exercise won't change mid-session
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!permission?.granted) return;
 
-  // --- CORE LOOP ---
-  const captureAndAnalyzeFrame = useCallback(async () => {
-    if (sessionStateRef.current !== 'running' || requestInFlightRef.current) return;
-    if (!cameraRef.current) return;
+    const wsUrl = `${WS_BASE_URL}/${exercise}/`;
+    wsRef.current = new WebSocket(wsUrl);
 
-    requestInFlightRef.current = true;
+    wsRef.current.onopen = () => {
+      setIsConnected(true);
+      addLog('Đã kết nối Server AI');
+    };
 
-    try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.15,
-        base64: true,
-        skipProcessing: true,
-      });
-
-      if (!photo?.base64) throw new Error('Không thể chụp ảnh');
-
-      const apiUrl = getPoseAnalyzeUrl(exercise, sessionIdRef.current ?? undefined);
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frame: photo.base64 }),
-      });
-
-      if (!response.ok) throw new Error(`Lỗi máy chủ: ${response.status}`);
-
-      const payload = await response.json();
+    wsRef.current.onmessage = (e) => {
+      const payload = JSON.parse(e.data);
 
       if (payload.type === 'no_detection') {
-        setIsConnected(true);
-        setCorrection(payload.correction || 'Vui lòng đứng vào khung hình');
+        addLog(payload.correction || 'Vui lòng đứng vào khung hình');
         setLandmarks([]);
-      } else if (payload.landmarks) {
-        sessionIdRef.current = payload.session_id ?? sessionIdRef.current;
-
-        // --- On-device engine overrides backend result for bicep_curl ---
-        // For all other exercises, fall back to backend payload values.
-        let nextCorrect: boolean;
-        let nextCorrection: string;
-        let currentReps: number;
-
-        if (exercise === 'bicep_curl') {
-          const engineResult = engineRef.current.processFrame(payload.landmarks);
-          nextCorrect    = engineResult.isCorrect;
-          nextCorrection = engineResult.correction;
-          currentReps    = engineResult.counter;
-        } else {
-          nextCorrect    = payload.is_correct ?? true;
-          nextCorrection = payload.correction || 'Tốt lắm, tiếp tục!';
-          currentReps    = payload.counter ?? 0;
-        }
-
-        setIsConnected(true);
+      } else if (payload.type === 'success' && payload.landmarks) {
         setScore(payload.score ?? 0);
-        setRepCount(currentReps);
-        setIsCorrect(nextCorrect);
-        setCorrection(nextCorrection);
+        setRepCount(payload.counter ?? 0);
+        setIsCorrect(payload.is_correct ?? true);
         setLandmarks(payload.landmarks);
 
-        // --- Bắt Event để ghi Log ---
-        if (currentReps > prevRepCountRef.current) {
-           addLog(`🔥 Hoàn thành Rep ${currentReps}`, 'success');
-           prevRepCountRef.current = currentReps;
-        }
+        if (payload.correction) addLog(payload.correction);
 
-        if (!nextCorrect && nextCorrection !== prevCorrectionRef.current) {
-           addLog(`Cảnh báo: ${nextCorrection}`, 'error');
-           prevCorrectionRef.current = nextCorrection;
-        }
-
-        if (nextCorrect) prevCorrectionRef.current = '';
-
-        // --- Đọc Audio cảnh báo ---
-        if (!nextCorrect && nextCorrection) {
+        // Đọc giọng nói nếu sai form
+        if (!payload.is_correct && payload.correction) {
           const now = Date.now();
           if (now - lastSpokenAtRef.current > SPEECH_COOLDOWN_MS) {
             lastSpokenAtRef.current = now;
-            Speech.speak(nextCorrection, { language: 'vi-VN', rate: 1.0 });
+            Speech.speak(payload.correction, { language: 'vi-VN', rate: 1.1 });
           }
         }
         
         updatePointsSmoothly(payload.landmarks);
       }
-    } catch (e) {
-      setIsConnected(false);
-      setCorrection('Mất kết nối với AI');
-    } finally {
-      requestInFlightRef.current = false;
-      if (sessionStateRef.current === 'running') {
-        setTimeout(captureAndAnalyzeFrame, CAPTURE_INTERVAL_MS);
-      }
-    }
-  }, [exercise, updatePointsSmoothly, addLog]);
 
-  useEffect(() => {
-    return () => {
-      sessionStateRef.current = 'idle';
-      Speech.stop();
-      void closeSession();
+      // PONG
+      isProcessingRef.current = false;
+      if (statusRef.current === 'RUNNING') {
+        captureAndSendFrame();
+      }
     };
-  }, [closeSession]);
+
+    wsRef.current.onerror = () => {
+      setIsConnected(false);
+      addLog('Lỗi mất kết nối!');
+    };
+
+    wsRef.current.onclose = () => {
+      setIsConnected(false);
+    };
+
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [exercise, permission?.granted]);
+
+  // Hàm thêm Log mới nhất lên đầu, giữ tối đa 3 dòng
+  const addLog = (newLog: string) => {
+    setLogHistory((prev) => {
+      if (prev[0] === newLog) return prev; // Chống spam cùng 1 câu
+      return [newLog, ...prev].slice(0, 3);
+    });
+  };
+
+  // --- CHỤP VÀ GỬI ẢNH ---
+  const captureAndSendFrame = async () => {
+    if (statusRef.current !== 'RUNNING' || !cameraRef.current || isProcessingRef.current) return;
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+
+    isProcessingRef.current = true;
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.05,
+        base64: true,
+        skipProcessing: true,
+        exif: false,
+        shutterSound: false,
+      });
+
+      if (photo?.base64) {
+        wsRef.current.send(JSON.stringify({ frame: photo.base64 }));
+      } else {
+        isProcessingRef.current = false;
+        if (statusRef.current === 'RUNNING') setTimeout(captureAndSendFrame, 50); 
+      }
+    } catch (e) {
+      isProcessingRef.current = false;
+      if (statusRef.current === 'RUNNING') setTimeout(captureAndSendFrame, 50);
+    }
+  };
+
+  // --- ĐIỀU KHIỂN SESSION ---
+  const toggleSession = () => {
+    if (sessionStatus === 'IDLE' || sessionStatus === 'PAUSED') {
+      setSessionStatus('RUNNING');
+      addLog('Bắt đầu bài tập!');
+      // Mồi phát súng đầu tiên để vòng lặp chạy
+      setTimeout(captureAndSendFrame, 100);
+    } else {
+      setSessionStatus('PAUSED');
+      addLog('Đã tạm dừng');
+    }
+  };
+
+  const endSession = () => {
+    setSessionStatus('IDLE');
+    setRepCount(0);
+    setScore(0);
+    setLandmarks([]);
+    addLog('Đã kết thúc buổi tập');
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
-      {/* 1. Camera View */}
-      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
+      {/* 1. LAYER CAMERA Ở DƯỚI CÙNG (TRÀN VIỀN) */}
+      <CameraView 
+        ref={cameraRef} 
+        style={StyleSheet.absoluteFill} 
+        facing="front" 
+      />
 
-      {/* 2. Skeleton Layer */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {landmarks.length > 0 && (
-          <Svg style={StyleSheet.absoluteFill}>
-            {POSE_CONNECTIONS.map(([start, end], i) => {
-              const p1 = landmarks[start];
-              const p2 = landmarks[end];
-              if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
+      {/* 2. LAYER SKELETON */}
+      {sessionStatus !== 'IDLE' && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {landmarks.length > 0 && (
+            <Svg style={StyleSheet.absoluteFill}>
+              {POSE_CONNECTIONS.map(([start, end], i) => {
+                const p1 = landmarks[start];
+                const p2 = landmarks[end];
+                if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
+                return (
+                  <Line key={`line-${i}`} x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H} x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H} stroke={isCorrect ? "#FF5E0E" : "#E63946"} strokeWidth="4" strokeOpacity={0.8} />
+                );
+              })}
+            </Svg>
+          )}
 
-              return (
-                <Line
-                  key={`line-${i}`}
-                  x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H}
-                  x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H}
-                  stroke={isCorrect ? "#52B788" : "#E63946"}
-                  strokeWidth="5"
-                  strokeOpacity={0.8}
-                  strokeLinecap="round"
-                />
-              );
-            })}
-          </Svg>
-        )}
+          {landmarks.length > 0 && animatedPoints.map((anim, index) => (
+            <Animated.View key={`joint-${index}`} style={[styles.landmarkDot, { backgroundColor: isCorrect ? '#FF5E0E' : '#E63946', width: index > 10 ? 8 : 4, height: index > 10 ? 8 : 4, transform: anim.getTranslateTransform() }]} />
+          ))}
+        </View>
+      )}
 
-        {landmarks.length > 0 && animatedPoints.map((anim, index) => (
-          <Animated.View
-            key={`joint-${index}`}
-            style={[
-              styles.landmarkDot,
-              {
-                backgroundColor: isCorrect ? '#52B788' : '#E63946',
-                width: index > 10 ? 10 : 6,
-                height: index > 10 ? 10 : 6,
-                transform: anim.getTranslateTransform(),
-              },
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* 3. UI Overlay */}
-      <SafeAreaView style={styles.overlaySafe}>
+      {/* 3. LAYER UI OVERLAY */}
+      <SafeAreaView style={styles.overlaySafe} pointerEvents="box-none">
         
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleExit} style={styles.exitBtn}>
-            <Ionicons name="close" size={28} color="white" />
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={28} color="white" />
           </TouchableOpacity>
-          <View style={styles.headerBadge}>
-            <View style={[styles.statusDot, { backgroundColor: sessionState === 'running' ? (isConnected ? '#52B788' : '#F4A261') : '#6c757d' }]} />
+          <View style={styles.headerTitleContainer}>
             <Text style={styles.exerciseTitle}>{exercise.replace('_', ' ').toUpperCase()}</Text>
           </View>
-          {/* Spacer */}
-          <View style={{ width: 40 }} />
+          <View style={[styles.statusDot, { backgroundColor: isConnected ? '#FF5E0E' : '#E63946' }]} />
         </View>
 
-        {/* HUD CHÍNH (Chỉ hiện khi đang chạy) */}
-        <View style={styles.mainHud}>
-          {sessionState === 'running' && (
-            <>
-              <Text style={styles.scoreText}>{score}</Text>
-              <View style={styles.repBadge}>
-                <Text style={styles.repText}>{repCount} REPS</Text>
-              </View>
-            </>
-          )}
-        </View>
+        {/* KHOẢNG TRỐNG Ở GIỮA ĐỂ NHÌN CAMERA */}
+        <View style={{ flex: 1 }} pointerEvents="none" />
 
-        {/* BOTTOM SECTION */}
-        <View style={styles.bottomSection}>
+        {/* BOTTOM HUD BẢNG ĐIỀU KHIỂN & LOGS */}
+        <View style={styles.bottomHUD}>
           
-          {/* ACTIVITY LOG */}
-          <View style={styles.logContainer}>
-            <ScrollView 
-              ref={scrollViewRef}
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-            >
-              {logs.map((log) => (
-                <Text key={log.id} style={styles.logLine}>
-                  <Text style={styles.logTime}>[{log.time}] </Text>
-                  <Text style={[
-                    styles.logMessage,
-                    log.type === 'success' && { color: '#52B788' },
-                    log.type === 'error' && { color: '#E63946' },
-                    log.type === 'warning' && { color: '#F4A261' },
-                  ]}>{log.message}</Text>
-                </Text>
-              ))}
-            </ScrollView>
+          {/* Thông số Reps & Score */}
+          <View style={styles.metricsRow}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>REPS</Text>
+              <Text style={styles.metricValue}>{repCount}</Text>
+            </View>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>ĐỘ CHUẨN</Text>
+              <Text style={[styles.metricValue, { color: isCorrect ? '#FF5E0E' : '#E63946' }]}>{score}%</Text>
+            </View>
           </View>
 
-          {/* CORRECTION BANNER */}
-          <View style={[styles.banner, { borderLeftColor: isCorrect ? '#52B788' : '#E63946' }]}>
-            <Ionicons 
-              name={isCorrect ? "checkmark-circle" : "alert-circle"} 
-              size={24} 
-              color={isCorrect ? '#52B788' : '#E63946'} 
-              style={{ marginRight: 10 }}
-            />
-            <Text style={styles.correctionText}>{correction}</Text>
+          {/* Hộp thoại Logs (Feedback gọn gàng) */}
+          <View style={styles.logBox}>
+            {logHistory.map((log, index) => (
+              <Text 
+                key={index} 
+                style={[
+                  styles.logText, 
+                  index === 0 ? styles.logTextPrimary : styles.logTextSecondary,
+                  { opacity: 1 - index * 0.4 } // Dòng cũ sẽ mờ dần
+                ]}
+                numberOfLines={1}
+              >
+                {index === 0 ? `👉 ${log}` : log}
+              </Text>
+            ))}
           </View>
 
-          {/* CONTROLS */}
+          {/* Các nút điều khiển Session */}
           <View style={styles.controlsRow}>
+            {sessionStatus !== 'IDLE' && (
+              <TouchableOpacity style={styles.endBtn} onPress={endSession}>
+                <Ionicons name="stop" size={24} color="#FFF" />
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity 
-              style={[styles.controlBtn, { backgroundColor: sessionState === 'idle' ? '#52B788' : '#E63946' }]}
+              style={[styles.mainBtn, { backgroundColor: sessionStatus === 'RUNNING' ? '#E63946' : '#FF5E0E' }]} 
               onPress={toggleSession}
             >
-              <Ionicons name={sessionState === 'idle' ? "play" : "stop"} size={28} color="white" />
-              <Text style={styles.controlBtnText}>
-                {sessionState === 'idle' ? 'BẮT ĐẦU' : 'DỪNG'}
+              <Ionicons 
+                name={sessionStatus === 'RUNNING' ? "pause" : "play"} 
+                size={24} 
+                color="white" 
+                style={{ marginRight: 8 }} 
+              />
+              <Text style={styles.mainBtnText}>
+                {sessionStatus === 'IDLE' ? 'BẮT ĐẦU' : sessionStatus === 'PAUSED' ? 'TIẾP TỤC' : 'TẠM DỪNG'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -399,37 +327,34 @@ export default function PoseTrackerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  landmarkDot: { position: 'absolute', borderRadius: 10, zIndex: 10, borderColor: 'white', borderWidth: 1.5 },
+  landmarkDot: { position: 'absolute', borderRadius: 10, zIndex: 10, borderColor: 'white', borderWidth: 1 },
   overlaySafe: { flex: 1, justifyContent: 'space-between' },
   
   // Header
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 10 },
-  exitBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  headerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
-  statusDot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
-  exerciseTitle: { color: 'white', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
+  iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20 },
+  headerTitleContainer: { backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 15 },
+  exerciseTitle: { color: 'white', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  statusDot: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: 'white' },
+
+  // Bottom HUD
+  bottomHUD: { backgroundColor: 'rgba(15, 15, 15, 0.85)', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 20, paddingBottom: Platform.OS === 'ios' ? 10 : 20 },
   
-  // HUD
-  mainHud: { alignItems: 'center', marginTop: 20 },
-  scoreText: { color: 'white', fontSize: 130, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10, textShadowOffset: { width: 0, height: 4 } },
-  repBadge: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 24, paddingVertical: 8, borderRadius: 25, marginTop: -15 },
-  repText: { color: 'white', fontSize: 22, fontWeight: '800' },
-  
-  // Bottom Section
-  bottomSection: { paddingHorizontal: 20, paddingBottom: 10 },
-  
-  // Terminal Log
-  logContainer: { height: 100, backgroundColor: 'rgba(20, 20, 20, 0.7)', borderRadius: 12, padding: 12, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  logLine: { fontSize: 12, marginBottom: 4, fontFamily: 'System' }, // Nếu ông cài font Mono (vd: Fira Code) thì đẹp hơn
-  logTime: { color: '#888' },
-  logMessage: { color: '#ddd', fontWeight: '500' },
-  
-  // Correction Banner
-  banner: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.95)', padding: 16, borderRadius: 15, borderLeftWidth: 6, marginBottom: 15, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
-  correctionText: { fontSize: 16, fontWeight: '700', color: '#111', flex: 1 },
-  
+  // Metrics
+  metricsRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 15 },
+  metricBox: { alignItems: 'center' },
+  metricLabel: { color: '#888', fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
+  metricValue: { color: 'white', fontSize: 40, fontWeight: '900' },
+
+  // Logs
+  logBox: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 15, padding: 15, marginBottom: 20, minHeight: 90, justifyContent: 'center' },
+  logText: { color: 'white', fontWeight: '600', textAlign: 'center', marginBottom: 4 },
+  logTextPrimary: { fontSize: 16, color: '#FF5E0E' }, // Đổi highlight log sang Cam Signature
+  logTextSecondary: { fontSize: 14, color: '#AAA' },
+
   // Controls
-  controlsRow: { flexDirection: 'row', justifyContent: 'center' },
-  controlBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, paddingHorizontal: 40, borderRadius: 30, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65, elevation: 8 },
-  controlBtnText: { color: 'white', fontSize: 18, fontWeight: '800', marginLeft: 10, letterSpacing: 1 },
+  controlsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15 },
+  mainBtn: { flex: 1, flexDirection: 'row', height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  mainBtnText: { color: 'white', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
+  endBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' },
 });

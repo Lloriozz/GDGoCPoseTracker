@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Modal, Animated } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { CARDIO_WORKOUT_DATA } from '../constants/workouts';
 import { useWorkoutTimer } from '../hooks/useWorkoutTimer';
@@ -53,7 +54,12 @@ export default function WorkoutScreen() {
   if (phase === 'start') {
     return (
       <View style={[workoutStyles.container, workoutStyles.finishedContainer, { paddingTop: insets.top }]}>
-        <Ionicons name="heart" size={100} color="#FF7A22" />
+        <LinearGradient
+          colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+          locations={[0, 0.35, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <Ionicons name="heart" size={100} color="#FF5E0E" />
         <Text style={workoutStyles.titleText}>{CARDIO_WORKOUT_DATA.workout_name}</Text>
         <Text style={workoutStyles.subtitleText}>
           {CARDIO_WORKOUT_DATA.exercises.length} Exercises • {CARDIO_WORKOUT_DATA.total_duration}
@@ -74,6 +80,11 @@ export default function WorkoutScreen() {
   if (phase === 'finished') {
     return (
       <View style={[workoutStyles.container, workoutStyles.finishedContainer, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+          locations={[0, 0.35, 1]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <Ionicons name="trophy" size={100} color="#FFD700" />
         <Text style={workoutStyles.titleText}>Workout Complete!</Text>
         <Text style={workoutStyles.subtitleText}>You crushed {CARDIO_WORKOUT_DATA.workout_name}</Text>
@@ -96,6 +107,11 @@ export default function WorkoutScreen() {
 
   return (
     <View style={[workoutStyles.container, phase === 'rest' && workoutStyles.restContainer, { paddingTop: insets.top }]}>
+      <LinearGradient
+        colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
       {/* Header */}
       <View style={workoutStyles.header}>
         <View style={{ flex: 1 }}>
@@ -104,13 +120,13 @@ export default function WorkoutScreen() {
           </Text>
         </View>
         <Pressable onPress={handleQuitRequest} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="close" size={28} color={phase === 'rest' ? '#fff' : '#333'} />
+          <Ionicons name="close" size={28} color="#FFF" />
         </Pressable>
       </View>
 
       {/* Progress Bar */}
       <View style={[workoutStyles.progressBarBackground, phase === 'rest' && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-        <Animated.View style={[workoutStyles.progressBarFill, { width: barWidth, backgroundColor: phase === 'rest' ? '#4ADE80' : '#FF7A22' }]} />
+        <Animated.View style={[workoutStyles.progressBarFill, { width: barWidth, backgroundColor: phase === 'rest' ? '#4ADE80' : '#FF5E0E' }]} />
       </View>
 
       {/* Main Content */}
@@ -173,7 +189,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     width: '90%',
     borderRadius: 24,
     padding: 24,
@@ -187,12 +203,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#111',
+    color: '#FFF',
     marginBottom: 10,
   },
   modalBody: {
     fontSize: 16,
-    color: '#666',
+    color: '#A1A1A1',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
@@ -210,10 +226,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnResume: {
-    backgroundColor: '#111',
+    backgroundColor: '#FF5E0E',
   },
   btnQuit: {
-    backgroundColor: '#FFF5F0',
+    backgroundColor: '#331B10',
   },
   btnResumeText: {
     color: '#fff',
@@ -221,7 +237,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   btnQuitText: {
-    color: '#FF7A22',
+    color: '#FF5E0E',
     fontSize: 16,
     fontWeight: '700',
   },

@@ -13,12 +13,12 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/NgoQuocBao1010/Exercise-Correction.git"
+        "url": "git+https://github.com/Lloriozz/GDGoCPoseTracker.git"
     },
     "author": "",
     "license": "ISC",
     "bugs": {
-        "url": "https://github.com/NgoQuocBao1010/Exercise-Correction/issues"
+        "url": "https://github.com/Lloriozz/GDGoCPoseTracker/issues"
     },
-    "homepage": "https://github.com/NgoQuocBao1010/Exercise-Correction#readme"
+    "homepage": "https://github.com/Lloriozz/GDGoCPoseTracker#readme"
 }

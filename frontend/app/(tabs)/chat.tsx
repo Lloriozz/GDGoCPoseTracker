@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { PlaceholderScreen } from '@/components/shared/PlaceholderScreen';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const PRIMARY = '#FF7A22';
+const PRIMARY = '#FF5E0E';
 
 const MOCK_MESSAGES = [
   {
@@ -69,10 +72,10 @@ export default function ChatScreen() {
       </View>
       <View style={styles.headerRight}>
         <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="call-outline" size={24} color="#111" />
+          <Ionicons name="call-outline" size={24} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="videocam-outline" size={26} color="#111" />
+          <Ionicons name="videocam-outline" size={26} color="#FFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -112,6 +115,11 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <LinearGradient
+        colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -128,9 +136,6 @@ export default function ChatScreen() {
 
         {/* Input Area */}
         <View style={styles.inputWrapper}>
-          <TouchableOpacity style={styles.attachBtn}>
-            <Ionicons name="add" size={28} color="#888" />
-          </TouchableOpacity>
           <TextInput 
             style={styles.textInput}
             placeholder="Type a message..."
@@ -157,11 +162,11 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
   },
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: 'transparent',
   },
   headerContainer: {
     flexDirection: 'row',
@@ -169,9 +174,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#ebebeb',
+    borderBottomColor: '#333',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -191,7 +196,7 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#111',
+    color: '#FFF',
   },
   headerStatus: {
     fontSize: 13,
@@ -238,11 +243,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   bubbleTrainer: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     borderBottomLeftRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 1,
   },
@@ -255,7 +260,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   messageTextTrainer: {
-    color: '#111',
+    color: '#FFF',
   },
   messageTextUser: {
     color: '#fff',
@@ -271,9 +276,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#ebebeb',
+    borderTopColor: '#333',
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
   },
   attachBtn: {
@@ -286,13 +291,13 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#333',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
     fontSize: 16,
-    color: '#111',
+    color: '#FFF',
     maxHeight: 100,
   },
   sendBtn: {

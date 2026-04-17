@@ -1,9 +1,10 @@
 {
   "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
+    "jsx": "react",
     "strict": true,
     "esModuleInterop": true,
-    "jsx": "react-native",
+    "allowSyntheticDefaultImports": true,
     "paths": {
       "@/*": [
         "./*"

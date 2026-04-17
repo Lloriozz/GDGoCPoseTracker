@@ -1,0 +1,24 @@
+[project]
+name = "fitness-chatbot"
+version = "0.1.0"
+description = "FastAPI skeleton for a Vietnamese fitness chatbot"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.116.0",
+    "uvicorn[standard]>=0.35.0",
+    "pydantic>=2.11.0",
+]
+
+[project.optional-dependencies]
+local-llm = [
+    "transformers>=4.57.0",
+    "accelerate>=1.10.0",
+    "sentencepiece>=0.2.0",
+]
+quantization = [
+    "bitsandbytes>=0.49.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

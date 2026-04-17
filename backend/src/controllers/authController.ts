@@ -9,7 +9,7 @@ export const register = async (req: Request, res: Response) => {
     const username = req.body.username || email.split('@')[0] + '_' + Date.now().toString().slice(-4);
 
     // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
+    const existingUser = await prisma.userProfile.findFirst({
       where: {
         OR: [
           { email },
@@ -25,8 +25,8 @@ export const register = async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user
-    const user = await prisma.user.create({
+    // Create user profile
+    const user = await prisma.userProfile.create({
       data: {
         email,
         username,
@@ -67,7 +67,7 @@ export const login = async (req: Request, res: Response) => {
     const { email, password } = req.body;
 
     // Find user
-    const user = await prisma.user.findUnique({
+    const user = await prisma.userProfile.findUnique({
       where: { email }
     });
 
@@ -116,7 +116,7 @@ export const getProfile = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.userProfile.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -126,6 +126,19 @@ export const getProfile = async (req: Request, res: Response) => {
         lastName: true,
         avatarUrl: true,
         bio: true,
+        // Fitness profile fields
+        age: true,
+        sex: true,
+        heightCm: true,
+        weightKg: true,
+        goal: true,
+        activityLevel: true,
+        workoutDaysPerWeek: true,
+        trainLocation: true,
+        experienceLevel: true,
+        budgetLevel: true,
+        cookTimePreference: true,
+        goalDetail: true,
         createdAt: true,
         updatedAt: true
       }
@@ -153,7 +166,7 @@ export const updateProfile = async (req: Request, res: Response) => {
 
     const { firstName, lastName, bio, avatarUrl } = req.body;
 
-    const user = await prisma.user.update({
+    const user = await prisma.userProfile.update({
       where: { id: userId },
       data: {
         firstName,

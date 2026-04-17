@@ -4,6 +4,7 @@ djangorestframework==3.14.0
 django-cors-headers==4.3.1
 django-extensions==3.2.3
 whitenoise==6.6.0
+channels==4.0.0
 daphne==4.0.0
 
 # ML and Computer Vision

@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes';
 import workoutRoutes from './routes/workoutRoutes';
 import forumRoutes from './routes/forumRoutes';
 import mediaRoutes from './routes/mediaRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 dotenv.config();
 
@@ -26,9 +27,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/forum', forumRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port http://localhost:${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT} (LAN accessible)`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
 });

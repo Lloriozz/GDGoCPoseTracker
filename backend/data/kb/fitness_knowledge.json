@@ -1,0 +1,226 @@
+[
+  {
+    "id": "meal_budget_protein",
+    "title": "Món ăn tiết kiệm giàu protein",
+    "content": "Nếu cần tiết kiệm, ưu tiên trứng, ức gà, đùi gà lọc da, đậu hũ, sữa chua, yến mạch, cơm, khoai, chuối và cá đóng hộp. Đây là nhóm món dễ mua, dễ lặp lại và dễ giữ macro ổn.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_budget",
+    "tags": ["tiết kiệm", "budget", "protein", "món ăn", "chi phí", "giá rẻ"],
+    "profile_tags": ["budget_low"],
+    "examples": [
+      "trứng luộc + bánh mì nguyên cám",
+      "cơm + ức gà + rau luộc",
+      "đậu hũ sốt cà + cơm trắng"
+    ]
+  },
+  {
+    "id": "meal_quick_prep",
+    "title": "Bữa ăn nhanh dưới 15 phút",
+    "content": "Nếu ít thời gian nấu, ưu tiên bữa ăn lắp nhanh như whey + chuối + yến mạch, bánh mì nguyên cám + trứng, sữa chua + trái cây, cơm nấu sẵn + ức gà áp chảo, hoặc cá hộp + khoai luộc.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_quick",
+    "tags": ["nhanh", "quick", "ít thời gian", "meal prep", "nấu nhanh"],
+    "profile_tags": ["quick", "prep_nhanh"],
+    "examples": [
+      "whey + chuối + yến mạch",
+      "bánh mì nguyên cám + trứng",
+      "cá hộp + khoai luộc"
+    ]
+  },
+  {
+    "id": "meal_distribution",
+    "title": "Nguyên tắc chia bữa ăn",
+    "content": "Mỗi bữa nên có một nguồn protein rõ ràng. Nếu mục tiêu tăng cơ hoặc giữ cơ, có thể chia 3-5 bữa và cố gắng mỗi bữa đạt khoảng 25-40g protein tùy tổng nhu cầu trong ngày.",
+    "intents": ["request_meal_guidance", "request_tdee_macro"],
+    "category": "meal_structure",
+    "tags": ["chia bữa", "protein", "meal timing", "macro", "muscle_gain"],
+    "profile_tags": ["protein", "muscle_gain"],
+    "examples": [
+      "3 bữa chính + 1 bữa phụ",
+      "4 bữa cân đều protein",
+      "mỗi bữa có 25-40g protein"
+    ]
+  },
+  {
+    "id": "food_substitutions",
+    "title": "Gợi ý thay món để bám macro",
+    "content": "Có thể thay ức gà bằng cá, thịt bò nạc, tôm, đậu hũ; thay cơm bằng khoai, bánh mì nguyên cám, bún hoặc phở; thay sữa chua bằng sữa không đường hoặc sữa đậu nành nếu cần tránh sữa.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_substitution",
+    "tags": ["thay món", "substitute", "macro", "allergy", "dairy free"],
+    "profile_tags": ["dairy_free", "khong_sua"],
+    "examples": [
+      "ức gà -> cá hoặc đậu hũ",
+      "cơm -> khoai hoặc bún",
+      "sữa chua -> sữa đậu nành"
+    ]
+  },
+  {
+    "id": "meal_vietnamese_options",
+    "title": "Gợi ý món Việt dễ bám meal plan",
+    "content": "Có thể xoay tua các lựa chọn kiểu Việt như phở bò ít mỡ, bún gà xé, cơm gà áp chảo, cơm cá, cháo yến mạch với trứng hoặc bánh mì trứng. Chỉ cần ưu tiên khẩu phần protein rõ, thêm rau và kiểm soát lượng dầu.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_vietnamese",
+    "tags": ["món việt", "phở", "bún", "cơm", "cháo", "bánh mì"],
+    "profile_tags": ["mon_viet"],
+    "examples": [
+      "phở bò ít mỡ + trái cây",
+      "bún gà xé + rau",
+      "cháo yến mạch + trứng"
+    ]
+  },
+  {
+    "id": "vegetarian_protein_sources",
+    "title": "Nguồn protein cho người ăn chay",
+    "content": "Nếu ăn chay, có thể ưu tiên đậu hũ, đậu nành, tempeh, sữa chua thực vật giàu protein, edamame, các loại đậu và whey thực vật. Nên ghép protein thực vật với tinh bột dễ ăn như cơm, khoai, yến mạch hoặc bánh mì nguyên cám.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_constraint_vegetarian",
+    "tags": ["ăn chay", "vegetarian", "đậu hũ", "đậu nành", "protein thực vật"],
+    "profile_tags": ["vegetarian", "an_chay", "plant_protein"],
+    "examples": [
+      "đậu hũ áp chảo + cơm + rau",
+      "edamame + khoai + trái cây",
+      "yến mạch + sữa đậu nành"
+    ]
+  },
+  {
+    "id": "dairy_free_substitutions",
+    "title": "Thay món khi cần tránh sữa",
+    "content": "Nếu không dùng được sữa hoặc dễ khó chịu với lactose, có thể đổi sữa chua Hy Lạp thành sữa đậu nành không đường, whey isolate hoặc protein thực vật, đồng thời tăng đậu hũ, trứng, cá và thịt nạc để bù protein.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_constraint_dairy_free",
+    "tags": ["không sữa", "dairy free", "lactose", "dị ứng sữa"],
+    "profile_tags": ["dairy_free", "khong_sua", "lactose_free"],
+    "examples": [
+      "sữa đậu nành không đường",
+      "protein thực vật",
+      "đậu hũ + cơm + rau"
+    ]
+  },
+  {
+    "id": "muscle_gain_meal_principles",
+    "title": "Nguyên tắc meal plan cho tăng cơ",
+    "content": "Khi tăng cơ, nên giữ protein ổn, tăng carb đủ để hỗ trợ hiệu suất tập và ưu tiên các món dễ ăn lặp lại. Nếu tổng calories cao, chia 4-5 bữa sẽ dễ bám hơn là dồn quá nhiều vào một bữa lớn.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_goal_muscle_gain",
+    "tags": ["tăng cơ", "muscle gain", "calories", "carb", "protein"],
+    "profile_tags": ["muscle_gain", "tang_co"],
+    "examples": [
+      "4 bữa chia đều carb",
+      "thêm khoai hoặc cơm quanh buổi tập",
+      "bữa phụ giàu carb dễ tiêu"
+    ]
+  },
+  {
+    "id": "fat_loss_meal_principles",
+    "title": "Nguyên tắc meal plan cho giảm mỡ",
+    "content": "Khi giảm mỡ, nên ưu tiên thực phẩm no lâu như protein nạc, khoai, rau, trái cây, canh và hạn chế món quá nhiều dầu hoặc calo lỏng. Chọn món đơn giản, ít sauce sẽ dễ kiểm soát năng lượng hơn.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_goal_fat_loss",
+    "tags": ["giảm mỡ", "fat loss", "no lâu", "ít calo", "protein nạc"],
+    "profile_tags": ["fat_loss", "giam_mo"],
+    "examples": [
+      "ức gà + khoai + rau",
+      "cá + cơm vừa phải + canh",
+      "sữa chua + trái cây"
+    ]
+  },
+  {
+    "id": "hydration_and_fiber",
+    "title": "Nước và chất xơ trong ăn uống",
+    "content": "Khi tăng carb hoặc tăng tổng calories, nên để ý uống đủ nước và giữ rau, trái cây, chất xơ trong ngày để tiêu hóa ổn hơn và meal plan dễ bám lâu dài hơn.",
+    "intents": ["request_meal_guidance", "general_fitness_qa"],
+    "category": "meal_recovery",
+    "tags": ["nước", "chất xơ", "rau", "trái cây", "tiêu hóa"],
+    "profile_tags": ["recovery", "tieu_hoa"],
+    "examples": [
+      "thêm rau ở bữa trưa và tối",
+      "1-2 phần trái cây mỗi ngày",
+      "uống nước đều trong ngày"
+    ]
+  },
+  {
+    "id": "beginner_training_consistency",
+    "title": "Ưu tiên ổn định cho người mới tập",
+    "content": "Với người mới, điều quan trọng nhất là bám lịch đều, giữ kỹ thuật ổn và tăng tải từ từ. Không cần quá nhiều bài; một khung 3-4 buổi với các động tác cơ bản đã đủ tạo tiến bộ tốt.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "workout_beginner",
+    "tags": ["beginner", "người mới", "ổn định", "kỹ thuật", "đều đặn"],
+    "profile_tags": ["beginner"],
+    "examples": [
+      "3-4 buổi/tuần là đủ",
+      "giữ form trước khi tăng tạ",
+      "tăng dần reps hoặc mức tạ"
+    ]
+  },
+  {
+    "id": "progressive_overload",
+    "title": "Progressive overload cơ bản",
+    "content": "Tiến bộ tập luyện đến từ việc tăng dần mức khó qua thời gian. Có thể tăng số reps, tăng tạ, tăng số set hoặc cải thiện kỹ thuật, nhưng chỉ tăng một mức vừa đủ để vẫn giữ form ổn.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "workout_progression",
+    "tags": ["progressive overload", "tăng tạ", "reps", "set", "tập luyện"],
+    "profile_tags": ["progressive_overload"],
+    "examples": [
+      "thêm 1-2 reps trước khi tăng tạ",
+      "giữ form rồi mới tăng tải",
+      "tăng một biến số mỗi lần"
+    ]
+  },
+  {
+    "id": "recovery_basics",
+    "title": "Recovery cơ bản",
+    "content": "Ngủ đủ, ăn đủ protein, bố trí ngày nghỉ hợp lý và giữ volume vừa sức là nền tảng để hồi phục. Đau mỏi cơ bắp nhẹ có thể bình thường, nhưng đau khớp sắc nét thì nên giảm tải và đánh giá lại.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "recovery_basics",
+    "tags": ["recovery", "hồi phục", "ngủ", "ngày nghỉ", "đau mỏi"],
+    "profile_tags": ["recovery", "hoi_phuc"],
+    "examples": [
+      "ngủ đủ trước ngày tập nặng",
+      "có ngày nghỉ giữa các buổi khó",
+      "giảm tải khi đau khớp tăng"
+    ]
+  },
+  {
+    "id": "knee_friendly_training",
+    "title": "Điều chỉnh tập khi nhạy cảm đầu gối",
+    "content": "Nếu đầu gối nhạy cảm, ưu tiên biến thể kiểm soát ROM, leg press nhẹ, box squat, hip hinge, glute bridge, step-up thấp và tránh nhồi volume squat hoặc lunge quá cao khi đang kích ứng.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "workout_injury_knee",
+    "tags": ["gối", "knee", "chấn thương", "lower body", "an toàn"],
+    "profile_tags": ["knee", "goi"],
+    "examples": [
+      "box squat nhẹ",
+      "glute bridge + hip hinge",
+      "step-up thấp kiểm soát ROM"
+    ]
+  },
+  {
+    "id": "shoulder_friendly_training",
+    "title": "Điều chỉnh tập khi nhạy cảm vai",
+    "content": "Nếu vai nhạy cảm, ưu tiên machine chest press, incline push-up, cable row, lateral raise nhẹ, face pull và tránh overhead press nặng hoặc ROM gây đau rõ rệt.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "workout_injury_shoulder",
+    "tags": ["vai", "shoulder", "chấn thương", "upper body", "an toàn"],
+    "profile_tags": ["shoulder", "vai"],
+    "examples": [
+      "machine chest press",
+      "cable row + face pull",
+      "lateral raise nhẹ"
+    ]
+  },
+  {
+    "id": "home_training_basics",
+    "title": "Nguyên tắc tập ở nhà",
+    "content": "Khi tập ở nhà, nên ưu tiên bài ít setup, dễ lặp lại và dễ tăng độ khó như push-up, squat goblet, dumbbell row, Romanian deadlift, split squat và core cơ bản. Quan trọng là giữ lịch đều và theo dõi reps.",
+    "intents": ["request_workout_plan", "general_fitness_qa"],
+    "category": "workout_home",
+    "tags": ["ở nhà", "home", "dumbbell", "bodyweight", "tập tại nhà"],
+    "profile_tags": ["home", "o_nha"],
+    "examples": [
+      "push-up + dumbbell row",
+      "goblet squat + Romanian deadlift",
+      "split squat + plank"
+    ]
+  }
+]

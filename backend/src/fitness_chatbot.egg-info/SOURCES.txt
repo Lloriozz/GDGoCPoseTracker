@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/fitness_chatbot.egg-info/PKG-INFO
+src/fitness_chatbot.egg-info/SOURCES.txt
+src/fitness_chatbot.egg-info/dependency_links.txt
+src/fitness_chatbot.egg-info/requires.txt
+src/fitness_chatbot.egg-info/top_level.txt
+tests/test_chat_quality.py
+tests/test_eval_finetune_readiness.py
+tests/test_nutrition_tool.py
+tests/test_retriever.py
+tests/test_smoke_eval_gemma.py
