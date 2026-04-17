@@ -174,7 +174,7 @@ export default function PoseTrackerScreen() {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.15,
+        quality: 0.05,
         base64: true,
         skipProcessing: true,
         exif: false,

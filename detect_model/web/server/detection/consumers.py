@@ -53,11 +53,11 @@ class PoseConsumer(AsyncWebsocketConsumer):
         self.pose = mp_pose.Pose(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
-            model_complexity=1,
-            smooth_landmarks=True,
+            model_complexity=0,
+            smooth_landmarks=False,
         )
         self.smoothed_landmarks = None
-        self.smoothing_alpha = 0.35
+        self.smoothing_alpha = 0.40
 
     async def disconnect(self, close_code):
         if hasattr(self, "pose") and self.pose:
@@ -124,7 +124,7 @@ class PoseConsumer(AsyncWebsocketConsumer):
         
         # Tối ưu 3: Resize ảnh nhỏ lại trước khi đưa vào MediaPipe (Giảm 50% thời gian xử lý)
         # MediaPipe đằng nào cũng tự thu nhỏ ảnh (xuống 256x256), nên thu nhỏ từ OpenCV sẽ nhanh hơn.
-        image = cv2.resize(image, (320, 240), interpolation=cv2.INTER_AREA)
+        image = cv2.resize(image, (256, 192), interpolation=cv2.INTER_LINEAR)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # Gọi hàm gộp (Chỉ mất 1 lần context-switch thay vì 2 lần như code cũ)
