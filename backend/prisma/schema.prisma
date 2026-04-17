@@ -7,44 +7,82 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User model for authentication and profiles
-model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  username      String    @unique
-  passwordHash  String
-  firstName     String?
-  lastName      String?
-  avatarUrl     String?
-  bio           String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  workouts      Workout[]
-  forumPosts    ForumPost[]
-  forumComments ForumComment[]
-  poseVectors   PoseVector[]
-  media         Media[]
+// ---------------------------------------------------------------------------
+// Unified user model: auth identity + chatbot fitness profile in one table.
+// All other entities (workouts, forum, media, chatbot) reference this via userId.
+// ---------------------------------------------------------------------------
+model UserProfile {
+  id       String @id @default(uuid())
+
+  // --- Auth fields (previously in User) ---
+  email        String  @unique
+  username     String  @unique
+  passwordHash String  @map("password_hash")
+  firstName    String? @map("first_name")
+  lastName     String? @map("last_name")
+  avatarUrl    String? @map("avatar_url")
+  bio          String?
+
+  // --- Fitness profile fields (collected by the chatbot) ---
+  age                Int?
+  sex                String?
+  heightCm           Float?  @map("height_cm")
+  weightKg           Float?  @map("weight_kg")
+  goal               String?
+  activityLevel      String? @map("activity_level")
+  workoutDaysPerWeek Int?    @map("workout_days_per_week")
+  trainLocation      String? @map("train_location")
+  experienceLevel    String? @map("experience_level")
+  budgetLevel        String? @map("budget_level")
+  cookTimePreference String? @map("cook_time_preference")
+  goalDetail         String? @map("goal_detail")
+
+  // Stored as JSON arrays serialised to text (e.g. '["knee","back"]')
+  injuries        String @default("[]")
+  dietPreferences String @default("[]") @map("diet_preferences")
+  allergies       String @default("[]")
+  preferredFoods  String @default("[]") @map("preferred_foods")
+  dislikedFoods   String @default("[]") @map("disliked_foods")
+
+  // --- Timestamps ---
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // --- Relations ---
+  workouts                Workout[]
+  forumPosts              ForumPost[]
+  forumComments           ForumComment[]
+  poseVectors             PoseVector[]
+  media                   Media[]
+  chatTurns               ChatTurn[]
+  nutritionClarifications NutritionClarification[]
+
+  @@map("user_profiles")
 }
 
+// ---------------------------------------------------------------------------
 // Workout model for tracking exercise sessions
+// ---------------------------------------------------------------------------
 model Workout {
-  id              String    @id @default(uuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id])
-  exerciseId      String
-  exercise        Exercise  @relation(fields: [exerciseId], references: [id])
-  duration        Int       // in seconds
-  score           Float?
-  completed       Boolean   @default(false)
-  startedAt       DateTime  @default(now())
-  completedAt     DateTime?
-  
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  user        UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId  String    @map("exercise_id")
+  exercise    Exercise  @relation(fields: [exerciseId], references: [id])
+  duration    Int       // in seconds
+  score       Float?
+  completed   Boolean   @default(false)
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
   @@index([userId])
   @@index([exerciseId])
+  @@map("workouts")
 }
 
-// Exercise model for exercise types
+// ---------------------------------------------------------------------------
+// Exercise catalogue
+// ---------------------------------------------------------------------------
 model Exercise {
   id          String    @id @default(uuid())
   name        String    @unique
@@ -52,80 +90,121 @@ model Exercise {
   description String?
   difficulty  String    // 'beginner', 'intermediate', 'advanced'
   duration    Int       // default duration in seconds
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
   workouts    Workout[]
+
+  @@map("exercises")
 }
 
-// Forum post model
+// ---------------------------------------------------------------------------
+// Forum
+// ---------------------------------------------------------------------------
 model ForumPost {
-  id         String         @id @default(uuid())
-  userId     String
-  user       User           @relation(fields: [userId], references: [id])
-  title      String
-  content    String
-  likes      Int            @default(0)
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  
-  comments   ForumComment[]
-  media      Media[]
-  
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  likes     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  comments  ForumComment[]
+  media     Media[]
+
   @@index([userId])
+  @@map("forum_posts")
 }
 
-// Forum comment model
 model ForumComment {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  postId    String
-  post      ForumPost @relation(fields: [postId], references: [id])
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String   @map("post_id")
+  post      ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   content   String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   media     Media[]
-  
+
   @@index([userId])
   @@index([postId])
+  @@map("forum_comments")
 }
 
+// ---------------------------------------------------------------------------
 // Pose vector model for AI comparison
+// ---------------------------------------------------------------------------
 model PoseVector {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  exerciseType String  // 'bicep_curl', 'squat', 'plank', 'lunge'
-  vectorData  String   // Store as JSON string for now (will convert to pgvector later)
-  timestamp   DateTime @default(now())
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseType String   @map("exercise_type") // 'bicep_curl', 'squat', 'plank', 'lunge'
+  vectorData   String   @map("vector_data")   // JSON string (will convert to pgvector later)
+  timestamp    DateTime @default(now())
 
   @@index([userId])
   @@index([exerciseType])
+  @@map("pose_vectors")
 }
 
+// ---------------------------------------------------------------------------
 // Media model for Cloudinary references and training videos
+// ---------------------------------------------------------------------------
 model Media {
-  id           String         @id @default(uuid())
-  userId       String
-  user         User           @relation(fields: [userId], references: [id])
-  type         String         // 'video', 'image'
-  usage        String         // 'training', 'post', 'comment'
-  cloudinaryId String?        // Cloudinary public ID (for social media)
-  url          String         // Cloudinary URL or S3 URL
-  mimeType     String?
-  size         Int?           // file size in bytes
-  postId       String?        // For post media
-  post         ForumPost?     @relation(fields: [postId], references: [id])
-  commentId    String?        // For comment media
-  comment      ForumComment?  @relation(fields: [commentId], references: [id])
-  exerciseType String?        // For training videos
-  createdAt    DateTime       @default(now())
-  
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  user         UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String    // 'video', 'image'
+  usage        String    // 'training', 'post', 'comment'
+  cloudinaryId String?   @map("cloudinary_id")
+  url          String
+  mimeType     String?   @map("mime_type")
+  size         Int?
+  postId       String?   @map("post_id")
+  post         ForumPost? @relation(fields: [postId], references: [id])
+  commentId    String?    @map("comment_id")
+  comment      ForumComment? @relation(fields: [commentId], references: [id])
+  exerciseType String?   @map("exercise_type")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
   @@index([userId])
   @@index([type])
   @@index([usage])
   @@index([postId])
   @@index([commentId])
+  @@map("media")
+}
+
+// ---------------------------------------------------------------------------
+// Chatbot tables — consumed by the Python FastAPI chatbot
+// ---------------------------------------------------------------------------
+
+// One conversation turn (N per user)
+model ChatTurn {
+  id               Int         @id @default(autoincrement())
+  sessionId        String      @map("session_id")
+  userId           String      @map("user_id")
+  user             UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userMessage      String      @map("user_message")
+  assistantMessage String      @map("assistant_message")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  @@index([sessionId, id(sort: Desc)], map: "idx_chat_turns_session_id")
+  @@map("chat_turns")
+}
+
+// Pending nutrition clarification state per session
+model NutritionClarification {
+  sessionId       String      @id @map("session_id")
+  userId          String      @map("user_id")
+  user            UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalMessage String      @map("original_message")
+  payload         String      // JSON-serialised clarification payload
+  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@map("nutrition_clarifications")
 }

@@ -12,6 +12,9 @@
     "prisma:studio": "prisma studio",
     "seed": "ts-node prisma/seed.ts"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "keywords": [
     "pose",
     "fitness",

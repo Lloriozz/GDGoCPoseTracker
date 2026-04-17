@@ -3,16 +3,16 @@ import { StyleSheet } from 'react-native';
 export const workoutStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#0F0F0F',
   },
   restContainer: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#1C1C1E',
   },
   finishedContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
   },
   header: {
     flexDirection: 'row',
@@ -93,18 +93,18 @@ export const workoutStyles = StyleSheet.create({
   titleText: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#111',
+    color: '#FFF',
     marginTop: 20,
     marginBottom: 10,
   },
   subtitleText: {
     fontSize: 18,
-    color: '#666',
+    color: '#A1A1A1',
     marginBottom: 40,
     textAlign: 'center',
   },
   primaryButton: {
-    backgroundColor: '#FF7A22',
+    backgroundColor: '#FF5E0E',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 30,

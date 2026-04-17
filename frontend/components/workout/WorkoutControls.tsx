@@ -25,13 +25,13 @@ export const WorkoutControls: React.FC<WorkoutControlsProps> = ({
           onPress={onPrevious}
           disabled={!canGoPrevious}
         >
-          <Ionicons name="play-skip-back" size={24} color="#333" />
+          <Ionicons name="play-skip-back" size={24} color="#FFF" />
         </Pressable>
         <Pressable style={styles.pauseButton} onPress={onPauseToggle}>
           <Ionicons name={isPaused ? "play" : "pause"} size={32} color="#fff" />
         </Pressable>
         <Pressable style={styles.skipButton} onPress={onSkip}>
-          <Ionicons name="play-skip-forward" size={24} color="#333" />
+          <Ionicons name="play-skip-forward" size={24} color="#FFF" />
         </Pressable>
       </View>
     </View>
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   pauseButton: {
-    backgroundColor: '#111',
+    backgroundColor: '#FF5E0E',
     width: 70,
     height: 70,
     borderRadius: 35,

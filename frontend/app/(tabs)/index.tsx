@@ -14,10 +14,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
-const PRIMARY = '#FF7A22';
-const GRAY_BG = '#F4F4F4';
-const GRAY_TEXT = '#888';
+const PRIMARY = '#FF5E0E';
+const GRAY_BG = '#1C1C1E';
+const GRAY_TEXT = '#A1A1A1';
 
 const CARD_SHADOW = Platform.select({
   ios: {
@@ -67,7 +68,12 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+      <LinearGradient
+        colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+        locations={[0, 0.35, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -207,7 +213,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F', // Fallback color
   },
   scroll: {
     flex: 1,
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#E0E0E0',
   },
   welcomeLabel: {
     fontSize: 16,
@@ -246,14 +252,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    backgroundColor: '#fff',
+    backgroundColor: '#0F0F0F',
     borderRadius: 10,
     width: 18,
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#e0e0e0',
+    borderColor: '#333',
   },
   badgeText: {
     fontSize: 10,
@@ -284,7 +290,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#1a1a1a',
+    color: '#E0E0E0',
   },
 
   // Categories
@@ -313,7 +319,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   chipTextInactive: {
-    color: '#444',
+    color: '#A1A1A1',
   },
 
   // Section headers
@@ -327,7 +333,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#1a1a1a',
+    color: '#FFFFFF',
   },
   seeAll: {
     fontSize: 15,
@@ -341,12 +347,12 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   workoutCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#1C1C1E',
     borderRadius: 20,
     overflow: 'hidden',
     width: 210,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#333',
   },
   workoutImage: {
     width: '100%',
@@ -358,7 +364,7 @@ const styles = StyleSheet.create({
   workoutTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#FFFFFF',
   },
   workoutCount: {
     fontSize: 13,
