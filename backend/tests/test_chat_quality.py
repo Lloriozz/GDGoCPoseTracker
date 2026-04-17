@@ -822,6 +822,38 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         self.assertIn("tai khoan ngan hang", normalized)
         self.assertNotIn("ban mock", normalized)
 
+    def test_general_guardrail_rejects_instruction_dump_for_recovery_question(self) -> None:
+        prompt = {
+            "intent": "general_fitness_qa",
+            "message": "dien giai co quan trong voi tap the thao khong",
+            "profile_data": {},
+            "tool_results": {},
+        }
+        grounded = self.backend._ground_response(
+            "KHONG NHAC DEN BAT TRUNG, TOOL, RESPONSE RULES, INTENTION HAY NHAN NOI BO.\n"
+            "TRA LOI BANG TIENG VIET TU NHIEN VA KHONG VIET CAC NHAN NOI BO.",
+            prompt,
+        )
+        normalized = normalize_text(grounded)
+        self.assertIn("dien giai", normalized)
+        self.assertNotIn("response rules", normalized)
+        self.assertNotIn("khong nhac den", normalized)
+
+    def test_general_guardrail_rejects_role_prefixed_echo_for_phone_question(self) -> None:
+        prompt = {
+            "intent": "general_fitness_qa",
+            "message": "toi muon mua dien thoai nen lam gi",
+            "profile_data": {},
+            "tool_results": {},
+        }
+        grounded = self.backend._ground_response(
+            "USER:** toi muon mua dien thoai nen lam gi?",
+            prompt,
+        )
+        normalized = normalize_text(grounded)
+        self.assertIn("dien thoai", normalized)
+        self.assertNotIn("user:", normalized)
+
     def test_workout_guardrail_rejects_meal_contamination(self) -> None:
         prompt = {
             "intent": "request_workout_plan",

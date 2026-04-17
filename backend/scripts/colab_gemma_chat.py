@@ -77,6 +77,12 @@ def _coerce_profile_patch(
     return user_profile_patch_cls(**profile_patch)
 
 
+def _set_setting_if_present(settings: Any, name: str, value: Any) -> None:
+    if value is None or not hasattr(settings, name):
+        return
+    setattr(settings, name, value)
+
+
 def configure_colab_runtime(
     *,
     llm_backend: str = "local-transformers",
@@ -126,8 +132,7 @@ def configure_colab_runtime(
         settings.rag_enabled = rag_enabled
     if database_url is not None:
         settings.database_url = database_url
-    if database_schema is not None:
-        settings.database_schema = database_schema
+    _set_setting_if_present(settings, "database_schema", database_schema)
 
     build_llm_backend = runtime["build_llm_backend"]
     if reload_backend and hasattr(build_llm_backend, "cache_clear"):
@@ -140,7 +145,7 @@ def configure_colab_runtime(
 def runtime_summary() -> dict[str, object]:
     runtime = _load_runtime_bindings()
     settings = runtime["settings"]
-    return {
+    summary: dict[str, object] = {
         "backend": settings.llm_backend,
         "model_id": settings.gemma_model_id,
         "device": settings.gemma_device,
@@ -155,10 +160,12 @@ def runtime_summary() -> dict[str, object]:
         "wiki_path": settings.wiki_path,
         "rag_enabled": settings.rag_enabled,
         "database_url": settings.database_url,
-        "database_schema": settings.database_schema,
         "project_root": str(PROJECT_ROOT),
         "code_reload_hint": "Pass reload_backend=True or restart the runtime after backend code changes.",
     }
+    if hasattr(settings, "database_schema"):
+        summary["database_schema"] = settings.database_schema
+    return summary
 
 
 def backend_diagnostics(*, load_model: bool = False) -> dict[str, object]:
@@ -472,6 +479,21 @@ def launch_cli_chat(
         response = session.send(message)
         print(f"Bot: {response.reply}")
         print("")
+
+
+def launch_colab_gemma_chat(
+    *,
+    user_id: str = "colab-user",
+    session_id: str | None = None,
+    default_profile_patch: dict[str, Any] | None = None,
+    reload_backend: bool = False,
+):
+    return launch_colab_chat(
+        user_id=user_id,
+        session_id=session_id,
+        default_profile_patch=default_profile_patch,
+        reload_backend=reload_backend,
+    )
 
 
 if __name__ == "__main__":

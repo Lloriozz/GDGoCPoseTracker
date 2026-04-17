@@ -15,6 +15,7 @@ NON_LATIN_NOISE_PATTERN = re.compile(
     r"[\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u0C00-\u0C7F\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]"
 )
 PROMPT_LEAK_LABEL_PATTERN = re.compile(r"^[A-Z][A-Z0-9_ ]{5,}:")
+ROLE_LABEL_PATTERN = re.compile(r"^(user|assistant|system)\s*[:>*\-\]]+", re.IGNORECASE)
 PROMPT_LEAK_LINE_PREFIXES = (
     "user_context",
     "user_context_final",
@@ -43,6 +44,11 @@ PROMPT_LEAK_LINE_PREFIXES = (
     "ngan sach",
     "mon ua thich",
     "mon khong thich",
+    "khong nhac den",
+    "khong viet cac nhan",
+    "hay chi tra loi",
+    "tra loi bang tieng viet",
+    "khong dien tiep mau prompt",
 )
 PROMPT_LEAK_MARKERS = (
     "user_context",
@@ -61,9 +67,14 @@ PROMPT_LEAK_MARKERS = (
     "goi y nen",
     "tool_results",
     "response_rules",
+    "response rules",
     "system_prompt",
     "profile hien dai",
     "profile hieuplan",
+    "khong nhac den",
+    "khong viet cac nhan",
+    "nhan noi bo",
+    "tra loi bang tieng viet",
 )
 CUDA_DEVICE_MODES = {"cuda", "auto"}
 QUANTIZED_MODES = {"4bit", "8bit"}
@@ -842,6 +853,11 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 "safety case",
                 "tool_settings",
                 "hay chi su dung cac quy tac nay",
+                "response rules",
+                "khong nhac den",
+                "khong viet cac nhan",
+                "nhan noi bo",
+                "tra loi bang tieng viet",
             ]
             if any(marker in normalized for marker in invalid_markers):
                 return self._fallback_for_prompt(prompt)
@@ -1016,6 +1032,8 @@ class LocalGemmaInferencer(BaseLLMBackend):
         normalized = normalize_text(line).strip(" .:-_;")
         if not normalized:
             return True
+        if ROLE_LABEL_PATTERN.match(line):
+            return True
         if PROMPT_LEAK_LABEL_PATTERN.match(line):
             return True
         if any(normalized.startswith(prefix) for prefix in PROMPT_LEAK_LINE_PREFIXES):
@@ -1033,6 +1051,8 @@ class LocalGemmaInferencer(BaseLLMBackend):
             return True
 
         lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if any(ROLE_LABEL_PATTERN.match(line) for line in lines):
+            return True
         prompt_leak_lines = sum(1 for line in lines if self._is_prompt_leak_line(line))
         if prompt_leak_lines >= 2:
             return True
