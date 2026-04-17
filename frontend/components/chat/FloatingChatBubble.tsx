@@ -12,6 +12,7 @@ import {
   PanResponder,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
@@ -194,7 +195,7 @@ export function FloatingChatBubble() {
         animationType="slide"
         onRequestClose={() => setIsOpen(false)}
       >
-        <View style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
@@ -265,7 +266,7 @@ export function FloatingChatBubble() {
               loading={loading}
             />
           </KeyboardAvoidingView>
-        </View>
+        </SafeAreaView>
       </Modal>
     </>
   );
