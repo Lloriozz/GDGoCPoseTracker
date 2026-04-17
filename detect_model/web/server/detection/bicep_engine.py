@@ -3,11 +3,15 @@ import math
 import joblib
 import numpy as np
 
-# Khai báo đường dẫn chuẩn
 MODEL_DIR = Path(__file__).resolve().parent.parent / "static" / "model"
 
+# Tối ưu 1: Mang class Point ra ngoài cùng để tránh Memory Leak
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
 class BicepCoachEngine:
-    # Thứ tự index CHUẨN XÁC theo file train của ông
     IMPORTANT_LMS = [0, 11, 12, 14, 13, 16, 15, 23, 24] 
     
     POSTURE_ERROR_THRESHOLD = 0.95
@@ -26,12 +30,10 @@ class BicepCoachEngine:
         if not scaler_path.exists():
             raise FileNotFoundError(f"Thiếu file scaler Bicep tại {scaler_path}")
 
-        # Tách lấy model KNN từ cục dictionary của ông
         all_models = joblib.load(model_path)
         self.model = all_models["KNN"] if isinstance(all_models, dict) else all_models
         self.scaler = joblib.load(scaler_path)
         
-        # Quản lý trạng thái 2 tay riêng biệt
         self.arms = {
             "Trái": {"stage": "down", "counter": 0, "peak": 1000},
             "Phải": {"stage": "down", "counter": 0, "peak": 1000}
@@ -43,14 +45,11 @@ class BicepCoachEngine:
         return abs(ang) if abs(ang) <= 180 else 360 - abs(ang)
 
     def process_frame(self, landmarks):
-        # Lấy tọa độ 2 tay trước để làm Gatekeeper
         L_sh, L_el, L_wr = landmarks[11], landmarks[13], landmarks[15]
         R_sh, R_el, R_wr = landmarks[12], landmarks[14], landmarks[16]
         total_reps = self.arms["Trái"]["counter"] + self.arms["Phải"]["counter"]
 
-        # ==========================================
-        # GATEKEEPER 1: VISIBILITY (Bước ra khỏi camera)
-        # ==========================================
+        # GATEKEEPER 1: VISIBILITY
         avg_vis = sum([L_sh.visibility, L_el.visibility, L_wr.visibility, R_sh.visibility, R_el.visibility, R_wr.visibility]) / 6.0
         if avg_vis < self.VIS_THRESH:
             return {
@@ -60,13 +59,10 @@ class BicepCoachEngine:
                 "correction": "Vui lòng đứng trọn vẹn vào khung hình!"
             }
 
-        # ==========================================
-        # GATEKEEPER 2: IDLE STATE (Đang đứng yên, chưa tập)
-        # ==========================================
+        # GATEKEEPER 2: IDLE STATE
         l_angle = self._calc_angle(L_sh, L_el, L_wr)
         r_angle = self._calc_angle(R_sh, R_el, R_wr)
 
-        # Nếu cả 2 tay đều duỗi (góc > 150) -> Người dùng đang đứng chờ, không đánh giá ML.
         if l_angle > 150 and r_angle > 150:
             return {
                 "counter": total_reps,
@@ -75,18 +71,19 @@ class BicepCoachEngine:
                 "correction": "Sẵn sàng? Hãy gập tạ lên nào!"
             }
 
-        # ==========================================
-        # GIAI ĐOẠN 3: ML MODEL ĐÁNH GIÁ LỖI NGẢ LƯNG
-        # (Chỉ chạy khi tay bắt đầu gập < 150 độ)
-        # ==========================================
-        row = []
-        for idx in self.IMPORTANT_LMS:
-            lm = landmarks[idx]
-            row.extend([lm.x, lm.y, lm.z, lm.visibility])
+        # Tối ưu 2: List Comprehension siêu tốc 
+        row = [val for idx in self.IMPORTANT_LMS for val in (
+            landmarks[idx].x, landmarks[idx].y, landmarks[idx].z, landmarks[idx].visibility
+        )]
 
-        X_scaled = self.scaler.transform(np.array(row, dtype=float).reshape(1, -1))
-        pred_class = self.model.predict(X_scaled)[0]
-        prob = float(np.max(self.model.predict_proba(X_scaled)))
+        # Tối ưu 3: Bỏ .reshape(1, -1), dùng np.array 2 chiều luôn
+        X_scaled = self.scaler.transform(np.array([row], dtype=float))
+        
+        try:
+            pred_class = self.model.predict(X_scaled)[0]
+            prob = float(np.max(self.model.predict_proba(X_scaled)))
+        except Exception:
+            return {"counter": total_reps, "score": 0, "is_correct": False, "correction": "Đang định vị tư thế...", "left_angle": round(l_angle), "right_angle": round(r_angle)}
 
         if prob >= self.POSTURE_ERROR_THRESHOLD:
             self.stand_posture = pred_class
@@ -98,26 +95,17 @@ class BicepCoachEngine:
             feedback.append("Đừng ngả người ra sau!")
             is_correct = False
 
-        # ==========================================
-        # GIAI ĐOẠN 4: TOÁN HỌC ĐÁNH GIÁ TỪNG TAY BICEP
-        # ==========================================
-        class Point: # Tạo class phụ để tính góc với mặt đất (trục Y)
-            def __init__(self, x, y):
-                self.x = x
-                self.y = y
-
+        # Tối ưu 4: Hàm analyze_arm gọn gàng, Point đã được mang ra ngoài
         def analyze_arm(sh, el, wr, curl_angle, side_name):
             arm_err = False
             state = self.arms[side_name]
 
-            # Logic đếm Rep và kiểm tra Peak Contraction (Siết cơ)
             if curl_angle > self.STAGE_DOWN_THRESHOLD:
                 if state["stage"] == "up":
-                    # Kiểm tra xem lúc nãy kéo lên có đủ cao không
                     if state["peak"] != 1000 and state["peak"] > self.PEAK_CONTRACTION_THRESHOLD:
                         feedback.append(f"Gập tay {side_name} cao hơn chút nữa!")
                         arm_err = True
-                    state["peak"] = 1000 # Reset peak cho rep mới
+                    state["peak"] = 1000 
                 state["stage"] = "down"
                 
             elif curl_angle < self.STAGE_UP_THRESHOLD and state["stage"] == "down":
@@ -127,9 +115,8 @@ class BicepCoachEngine:
             if state["stage"] == "up" and curl_angle < state["peak"]:
                 state["peak"] = curl_angle
 
-            # Logic kiểm tra Loose Upper Arm (Mở cùi chỏ)
-            if self.stand_posture != "L": # Chỉ bắt lỗi cùi chỏ nếu lưng đang thẳng
-                proj = Point(sh.x, 1.0) # Hình chiếu thẳng đứng
+            if self.stand_posture != "L": 
+                proj = Point(sh.x, 1.0) 
                 upper_arm_angle = self._calc_angle(el, sh, proj)
                 
                 if upper_arm_angle > self.LOOSE_UPPER_ARM_ANGLE_THRESHOLD:
@@ -138,14 +125,12 @@ class BicepCoachEngine:
 
             return arm_err
 
-        # Phân tích tay trái và tay phải
         l_err = analyze_arm(L_sh, L_el, L_wr, l_angle, "Trái")
         r_err = analyze_arm(R_sh, R_el, R_wr, r_angle, "Phải")
 
         if l_err or r_err:
             is_correct = False
 
-        # 5. TỔNG HỢP KẾT QUẢ GỬI VỀ MOBILE
         total_reps = self.arms["Trái"]["counter"] + self.arms["Phải"]["counter"]
         correction_text = " - ".join(feedback) if feedback else "Form rất nét, tiếp tục!"
 
@@ -154,6 +139,6 @@ class BicepCoachEngine:
             "score": round(prob * 100, 1),
             "is_correct": is_correct,
             "correction": correction_text,
-            "left_angle": round(l_angle), # Gửi thêm cái này
+            "left_angle": round(l_angle), 
             "right_angle": round(r_angle)
         }
