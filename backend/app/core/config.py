@@ -26,7 +26,7 @@ class Settings:
     gemma_device: str = os.getenv("GEMMA_DEVICE", "cuda")
     gemma_dtype: str = os.getenv("GEMMA_DTYPE", "bfloat16")
     gemma_quantization: str = os.getenv("GEMMA_QUANTIZATION", "4bit")
-    gemma_max_new_tokens: int = int(os.getenv("GEMMA_MAX_NEW_TOKENS", "192"))
+    gemma_max_new_tokens: int = int(os.getenv("GEMMA_MAX_NEW_TOKENS", "512"))
     gemma_temperature: float = float(os.getenv("GEMMA_TEMPERATURE", "0.3"))
     gemma_top_p: float = float(os.getenv("GEMMA_TOP_P", "0.95"))
     gemma_do_sample: bool = _env_bool("GEMMA_DO_SAMPLE", False)
