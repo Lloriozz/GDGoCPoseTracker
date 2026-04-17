@@ -234,14 +234,14 @@ export default function PoseTrackerScreen() {
                 const p2 = landmarks[end];
                 if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
                 return (
-                  <Line key={`line-${i}`} x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H} x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H} stroke={isCorrect ? "#52B788" : "#E63946"} strokeWidth="4" strokeOpacity={0.8} />
+                  <Line key={`line-${i}`} x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H} x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H} stroke={isCorrect ? "#FF5E0E" : "#E63946"} strokeWidth="4" strokeOpacity={0.8} />
                 );
               })}
             </Svg>
           )}
 
           {landmarks.length > 0 && animatedPoints.map((anim, index) => (
-            <Animated.View key={`joint-${index}`} style={[styles.landmarkDot, { backgroundColor: isCorrect ? '#52B788' : '#E63946', width: index > 10 ? 8 : 4, height: index > 10 ? 8 : 4, transform: anim.getTranslateTransform() }]} />
+            <Animated.View key={`joint-${index}`} style={[styles.landmarkDot, { backgroundColor: isCorrect ? '#FF5E0E' : '#E63946', width: index > 10 ? 8 : 4, height: index > 10 ? 8 : 4, transform: anim.getTranslateTransform() }]} />
           ))}
         </View>
       )}
@@ -257,7 +257,7 @@ export default function PoseTrackerScreen() {
           <View style={styles.headerTitleContainer}>
             <Text style={styles.exerciseTitle}>{exercise.replace('_', ' ').toUpperCase()}</Text>
           </View>
-          <View style={[styles.statusDot, { backgroundColor: isConnected ? '#52B788' : '#E63946' }]} />
+          <View style={[styles.statusDot, { backgroundColor: isConnected ? '#FF5E0E' : '#E63946' }]} />
         </View>
 
         {/* KHOẢNG TRỐNG Ở GIỮA ĐỂ NHÌN CAMERA */}
@@ -274,7 +274,7 @@ export default function PoseTrackerScreen() {
             </View>
             <View style={styles.metricBox}>
               <Text style={styles.metricLabel}>ĐỘ CHUẨN</Text>
-              <Text style={[styles.metricValue, { color: isCorrect ? '#52B788' : '#E63946' }]}>{score}%</Text>
+              <Text style={[styles.metricValue, { color: isCorrect ? '#FF5E0E' : '#E63946' }]}>{score}%</Text>
             </View>
           </View>
 
@@ -304,7 +304,7 @@ export default function PoseTrackerScreen() {
             )}
 
             <TouchableOpacity 
-              style={[styles.mainBtn, { backgroundColor: sessionStatus === 'RUNNING' ? '#E63946' : '#52B788' }]} 
+              style={[styles.mainBtn, { backgroundColor: sessionStatus === 'RUNNING' ? '#E63946' : '#FF5E0E' }]} 
               onPress={toggleSession}
             >
               <Ionicons 
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   // Logs
   logBox: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 15, padding: 15, marginBottom: 20, minHeight: 90, justifyContent: 'center' },
   logText: { color: 'white', fontWeight: '600', textAlign: 'center', marginBottom: 4 },
-  logTextPrimary: { fontSize: 16, color: '#FFD166' }, // Màu vàng nổi bật cho nhắc nhở mới nhất
+  logTextPrimary: { fontSize: 16, color: '#FF5E0E' }, // Đổi highlight log sang Cam Signature
   logTextSecondary: { fontSize: 14, color: '#AAA' },
 
   // Controls

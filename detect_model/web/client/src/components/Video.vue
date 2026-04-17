@@ -13,7 +13,7 @@ const { videoName, startAt } = defineProps({
 
 const url = computed(
     () => `${apiUrl}/api/video/stream?video_name=${videoName}`
-    // () => `http://baobao.com`
+    // () => `http://longlong.com`
 );
 
 const video = ref(null);

@@ -30,7 +30,14 @@ const CARD_SHADOW = Platform.select({
   android: { elevation: 4 },
 }) as object;
 
-const categories = ['All', 'Squad', 'Bicep'];
+const categories = [
+  { id: 'all', label: 'All', icon: 'barbell' },
+  { id: 'strength', label: 'Strength', icon: 'barbell' },
+  { id: 'treadmill', label: 'Treadmill', icon: 'fitness' },
+  { id: 'bicycle', label: 'Bicycle', icon: 'bicycle' },
+  { id: 'cardio', label: 'Cardio', icon: 'pulse' },
+  { id: 'yoga', label: 'Yoga', icon: 'leaf' },
+];
 
 const workouts = [
   {
@@ -38,12 +45,49 @@ const workouts = [
     title: 'Bicep Curl',
     count: '10 Exercises',
     image: require('../../assets/bicepcurl.jpg'),
+    category: 'strength',
   },
   {
     id: 2,
     title: 'Squat',
     count: '3 Exercises',
     image: require('../../assets/squat.jpg'),
+    category: 'strength',
+  },
+  {
+    id: 3,
+    title: 'Treadmill Sprint',
+    count: '8 Exercises',
+    image: require('../../assets/bicepcurl.jpg'),
+    category: 'treadmill',
+  },
+  {
+    id: 4,
+    title: 'Cycling Endurance',
+    count: '12 Exercises',
+    image: require('../../assets/squat.jpg'),
+    category: 'bicycle',
+  },
+  {
+    id: 5,
+    title: 'HIIT Cardio',
+    count: '6 Exercises',
+    image: require('../../assets/bicepcurl.jpg'),
+    category: 'cardio',
+  },
+  {
+    id: 6,
+    title: 'Yoga Flow',
+    count: '5 Exercises',
+    image: require('../../assets/squat.jpg'),
+    category: 'yoga',
+  },
+  {
+    id: 7,
+    title: 'Shoulder Press',
+    count: '7 Exercises',
+    image: require('../../assets/bicepcurl.jpg'),
+    category: 'strength',
   },
 ];
 
@@ -59,15 +103,15 @@ const programs = [
     id: 2,
     category: 'Chest',
     title: 'Hardcore Chest',
-    image: require('../../assets/program.jpg'),
+    image: require('../../assets/chest-program.jpg'),
   },
 ];
 
 export default function HomeScreen() {
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState('all');
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <LinearGradient
         colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
         locations={[0, 0.35, 1]}
@@ -114,21 +158,30 @@ export default function HomeScreen() {
         >
           {categories.map((cat) => (
             <TouchableOpacity
-              key={cat}
+              key={cat.id}
               activeOpacity={0.8}
-              onPress={() => setActiveCategory(cat)}
+              onPress={() => setActiveCategory(cat.id)}
               style={[
                 styles.chip,
-                activeCategory === cat ? styles.chipActive : styles.chipInactive,
+                activeCategory === cat.id ? styles.chipActive : styles.chipInactive,
               ]}
             >
+              {activeCategory === cat.id && (
+                <View style={styles.chipGlow} />
+              )}
+              <Ionicons
+                name={cat.icon as any}
+                size={18}
+                color={activeCategory === cat.id ? '#fff' : '#666'}
+                style={{ marginRight: 8 }}
+              />
               <Text
                 style={[
                   styles.chipText,
-                  activeCategory === cat ? styles.chipTextActive : styles.chipTextInactive,
+                  activeCategory === cat.id ? styles.chipTextActive : styles.chipTextInactive,
                 ]}
               >
-                {cat}
+                {cat.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -177,6 +230,11 @@ export default function HomeScreen() {
             key={p.id}
             activeOpacity={0.9}
             style={[styles.programCard, CARD_SHADOW]}
+            onPress={() => {
+              if (p.route) {
+                router.push(p.route as any);
+              }
+            }}
           >
             <ImageBackground
               source={p.image}
@@ -184,20 +242,28 @@ export default function HomeScreen() {
               resizeMode="cover"
               imageStyle={styles.programBgImage}
             >
-              <View style={styles.overlay} />
+              <LinearGradient
+                colors={[PRIMARY, 'rgba(255, 94, 14, 0.5)', 'rgba(0, 0, 0, 0.7)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientOverlay}
+              />
               <View style={styles.programContent}>
-                <Text style={styles.programCategory}>{p.category}</Text>
+                <Text style={styles.programNumber}>100+</Text>
                 <Text style={styles.programTitle}>{p.title}</Text>
-                <TouchableOpacity 
-                    style={styles.startBtn} 
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      if (p.route) {
-                        router.push(p.route as any);
-                      }
-                    }}
-                  >
-                  <Text style={styles.startBtnText}>Start Program</Text>
+                <TouchableOpacity
+                  style={styles.startBtn}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (p.route) {
+                      router.push(p.route as any);
+                    }
+                  }}
+                >
+                  <Text style={styles.startBtnText}>Join Now</Text>
+                  <View style={styles.arrowCircle}>
+                    <Ionicons name="arrow-forward" size={14} color="#fff" />
+                  </View>
                 </TouchableOpacity>
               </View>
             </ImageBackground>
@@ -295,31 +361,61 @@ const styles = StyleSheet.create({
 
   // Categories
   categoryRow: {
-    paddingVertical: 4,
+    paddingVertical: 8,
     paddingRight: 4,
-    gap: 10,
+    gap: 12,
     marginTop: 20,
   },
   chip: {
-    paddingHorizontal: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 24,
+    borderRadius: 28,
+    position: 'relative',
+  },
+  chipGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: PRIMARY,
+    borderRadius: 28,
+    opacity: 0.2,
+    ...Platform.select({
+      ios: {
+        shadowColor: PRIMARY,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
   },
   chipActive: {
     backgroundColor: PRIMARY,
+    ...Platform.select({
+      ios: {
+        shadowColor: PRIMARY,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+      },
+      android: { elevation: 6 },
+    }),
   },
   chipInactive: {
     backgroundColor: GRAY_BG,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   chipText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
+    zIndex: 10,
   },
   chipTextActive: {
     color: '#fff',
   },
   chipTextInactive: {
-    color: '#A1A1A1',
+    color: '#666',
   },
 
   // Section headers
@@ -387,45 +483,59 @@ const styles = StyleSheet.create({
   },
   programBg: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    paddingLeft: 24,
+    paddingTop: 24,
   },
   programBgImage: {
     borderRadius: 22,
   },
-  overlay: {
+  gradientOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     borderRadius: 22,
   },
   programContent: {
-    padding: 20,
+    zIndex: 10,
+    width: '50%',
   },
-  programCategory: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    fontWeight: '500',
-    marginBottom: 4,
+  programNumber: {
+    fontSize: 52,
+    fontWeight: '900',
+    color: '#fff',
+    lineHeight: 56,
   },
   programTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#fff',
-    marginBottom: 12,
+    marginBottom: 16,
+    marginTop: 4,
   },
   startBtn: {
-    backgroundColor: PRIMARY,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 24,
+    gap: 10,
   },
   startBtnText: {
-    color: '#fff',
+    color: PRIMARY,
     fontWeight: '700',
     fontSize: 14,
   },
+  arrowCircle: {
+    backgroundColor: PRIMARY,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   bottomSpacer: {
-    height: 20,
+    height: 0,
   },
 });

@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -11,8 +10,9 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer } from './ChatComposer';
@@ -47,6 +47,9 @@ function buildMessage(role: 'assistant' | 'user', text: string, meta?: string): 
 }
 
 export function FloatingChatBubble() {
+  // ==========================================
+  // LOGIC ZONE - GIỮ NGUYÊN 100% NHƯ BẢN GỐC
+  // ==========================================
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState('');
@@ -112,16 +115,9 @@ export function FloatingChatBubble() {
     })
   ).current;
 
-  const handleOpenModal = () => {
-    setIsOpen(true);
-    setLoading(false);
-  };
-
   const sendMessage = async (rawText?: string) => {
     const nextText = (rawText ?? input).trim();
-    console.log('sendMessage called with:', nextText, 'loading:', loading);
     if (!nextText || loading) {
-      console.log('sendMessage aborted: empty or loading');
       return;
     }
 
@@ -129,7 +125,6 @@ export function FloatingChatBubble() {
     setMessages((current) => [...current, userMessage]);
     setInput('');
     setLoading(true);
-    console.log('Sending to backend...');
 
     try {
       const response = await sendChatMessage({
@@ -165,109 +160,150 @@ export function FloatingChatBubble() {
     }
   };
 
+  // ==========================================
+  // UI & STYLES ZONE - ĐÃ FIX TRÀN VIỀN IPHONE
+  // ==========================================
+  
+  // Công cụ mới để fix UI
+  const insets = useSafeAreaInsets();
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  // Custom hàm mở/đóng để kèm animation trượt
+  const handleOpenModal = () => {
+    setIsOpen(true);
+    setLoading(false);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleCloseModal = () => {
+    Keyboard.dismiss();
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setIsOpen(false));
+  };
+
   return (
     <>
-      {/* Floating Bubble Button */}
-      <Animated.View
-        style={[
-          styles.bubbleContainer,
-          { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={handleOpenModal}
-          style={styles.bubble}
+      {/* Nút Bong Bóng Kéo Thả (Ẩn đi khi khung chat mở) */}
+      {!isOpen && (
+        <Animated.View
+          style={[
+            styles.bubbleContainer,
+            { transform: [{ translateX: pan.x }, { translateY: pan.y }] },
+          ]}
+          {...panResponder.panHandlers}
         >
-          <Ionicons name="chatbubble" size={28} color="#fff" />
-          {messages.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{messages.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </Animated.View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={handleOpenModal}
+            style={styles.bubble}
+          >
+            <Ionicons name="chatbubble" size={28} color="#fff" />
+            {messages.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{messages.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
-      {/* Chat Modal */}
-      <Modal
-        visible={isOpen}
-        animationType="slide"
-        onRequestClose={() => setIsOpen(false)}
+      {/* Khung Chat Tràn Màn Hình (Thay thế cho Modal) */}
+      <Animated.View
+        pointerEvents={isOpen ? 'auto' : 'none'}
+        style={[
+          StyleSheet.absoluteFillObject, // Chiếm trọn màn hình
+          styles.overlayContainer,
+          { transform: [{ translateY: slideAnim }] },
+          { paddingTop: Math.max(insets.top, 20) }, // Quan trọng: Thụt xuống dưới tai thỏ
+        ]}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          style={styles.chatContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+        >
+          <LinearGradient
+            colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+            locations={[0, 0.35, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
+          
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => setIsOpen(false)}
+              onPress={handleCloseModal}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={28} color={theme.colors.text} />
+              <Ionicons name="chevron-down" size={32} color={theme.colors.text} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>PoseTracker Chat</Text>
             <View style={styles.headerSpacer} />
           </View>
 
-          {/* Chat Content */}
-          <KeyboardAvoidingView
-            style={styles.chatContainer}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          {/* Vùng cuộn tin nhắn */}
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent, 
+              { paddingBottom: Math.max(20, insets.bottom + 10) } // Thụt lên trên thanh Home Bar
+            ]}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            showsVerticalScrollIndicator={false}
           >
-            <LinearGradient
-              colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
-              locations={[0, 0.35, 1]}
-              style={StyleSheet.absoluteFillObject}
-            />
-            <ScrollView
-              ref={scrollRef}
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.greeting}>Xin chào!</Text>
-              <Text style={styles.hero}>Chúng ta nên bắt đầu từ đâu nhỉ?</Text>
+            <Text style={styles.greeting}>Xin chào!</Text>
+            <Text style={styles.hero}>Chúng ta nên bắt đầu từ đâu nhỉ?</Text>
 
-              {messages.length === 0 ? (
-                <View style={styles.quickActionGroup}>
-                  {quickActions.map((item) => (
-                    <QuickActionButton
-                      key={item.label}
-                      label={item.label}
-                      onPress={() => sendMessage(item.prompt)}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.messageList}>
-                  {messages.map((message) => (
-                    <ChatBubble key={message.id} message={message} />
-                  ))}
-                </View>
-              )}
+            {messages.length === 0 ? (
+              <View style={styles.quickActionGroup}>
+                {quickActions.map((item) => (
+                  <QuickActionButton
+                    key={item.label}
+                    label={item.label}
+                    onPress={() => sendMessage(item.prompt)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.messageList}>
+                {messages.map((message) => (
+                  <ChatBubble key={message.id} message={message} />
+                ))}
+              </View>
+            )}
 
-              {messages.length > 0 ? (
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={() => setMessages([])}
-                  style={styles.resetButton}
-                >
-                  <Text style={styles.resetText}>Bắt đầu lại</Text>
-                </TouchableOpacity>
-              ) : null}
-            </ScrollView>
+            {messages.length > 0 ? (
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => setMessages([])}
+                style={styles.resetButton}
+              >
+                <Text style={styles.resetText}>Bắt đầu lại</Text>
+              </TouchableOpacity>
+            ) : null}
+          </ScrollView>
 
-            <ChatComposer
-              value={input}
-              onChangeText={setInput}
-              onSend={() => sendMessage()}
-              loading={loading}
-            />
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
+          {/* Khung soạn thảo dưới cùng */}
+          <ChatComposer
+            value={input}
+            onChangeText={setInput}
+            onSend={() => sendMessage()}
+            loading={loading}
+          />
+          
+          {/* Lấp đầy khoảng trống thanh Home Bar trên iOS khi tắt bàn phím */}
+          {Platform.OS === 'ios' && <View style={{ height: insets.bottom }} />}
+        </KeyboardAvoidingView>
+      </Animated.View>
     </>
   );
 }
@@ -309,9 +345,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  modalContainer: {
+  
+  /* CÁC STYLE MỚI FIX UI */
+  overlayContainer: {
+    zIndex: 9999, // Đảm bảo đè lên mọi thứ của màn hình hiện tại
+    backgroundColor: '#0F0F0F',
+  },
+  chatContainer: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: 'transparent',
   },
   header: {
     height: 60,
@@ -322,11 +364,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    zIndex: 10,
   },
   closeButton: {
     width: 40,
     height: 40,
-    alignItems: 'center',
+    alignItems: 'flex-start', // Căn trái cho icon back/close
     justifyContent: 'center',
   },
   headerTitle: {
@@ -337,17 +380,13 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
-  chatContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingTop: 18,
-    paddingBottom: 20,
+    flexGrow: 1,
   },
   greeting: {
     fontSize: 18,
@@ -360,7 +399,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 32,
-    maxWidth: 290,
+    maxWidth: '90%',
   },
   quickActionGroup: {
     marginTop: 22,
@@ -369,12 +408,13 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   resetButton: {
-    alignSelf: 'flex-start',
+    alignSelf: 'center', // Đưa ra giữa
     marginTop: 14,
+    marginBottom: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: theme.radius.round,
-    backgroundColor: theme.colors.primarySoft,
+    backgroundColor: 'rgba(255, 94, 14, 0.15)', // Tông màu hợp với gradient
   },
   resetText: {
     color: theme.colors.primary,
