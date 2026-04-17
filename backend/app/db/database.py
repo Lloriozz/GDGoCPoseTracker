@@ -1,51 +1,20 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import re
 
 import psycopg2
 import psycopg2.extras
-from psycopg2 import sql
 
 from app.core.config import settings
 
 
-_SCHEMA_NAME_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _get_database_schema() -> str:
-    schema_name = (settings.database_schema or "public").strip()
-    if not _SCHEMA_NAME_PATTERN.fullmatch(schema_name):
-        raise ValueError(
-            "DATABASE_SCHEMA must start with a letter or underscore and contain only letters, digits, or underscores."
-        )
-    return schema_name
-
-
-def _connect_raw():
-    return psycopg2.connect(
+@contextmanager
+def get_connection():
+    connection = psycopg2.connect(
         settings.database_url,
         cursor_factory=psycopg2.extras.RealDictCursor,
     )
-
-
-def _apply_search_path(connection) -> None:
-    schema_name = _get_database_schema()
-    with connection.cursor() as cursor:
-        if schema_name != "public":
-            cursor.execute(
-                sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(schema_name))
-            )
-        cursor.execute(
-            sql.SQL("SET search_path TO {}, public").format(sql.Identifier(schema_name))
-        )
-
-
-@contextmanager
-def get_connection():
-    connection = _connect_raw()
     try:
-        _apply_search_path(connection)
         yield connection
         connection.commit()
     except Exception:
@@ -121,26 +90,3 @@ def init_db() -> None:
                 """
             )
             cursor.execute("SELECT 1")
-
-
-def drop_schema(schema_name: str | None = None) -> None:
-    active_schema = schema_name or _get_database_schema()
-    if active_schema == "public":
-        raise ValueError("Refusing to drop the public schema.")
-    if not _SCHEMA_NAME_PATTERN.fullmatch(active_schema):
-        raise ValueError(
-            "Schema names must start with a letter or underscore and contain only letters, digits, or underscores."
-        )
-
-    connection = _connect_raw()
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(active_schema))
-            )
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()

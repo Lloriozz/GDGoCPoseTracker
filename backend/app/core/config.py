@@ -39,10 +39,6 @@ class Settings:
         "DATABASE_URL",
         "postgresql://postgres:Duy1805@localhost:5432/PoseTracker",
     )
-    database_schema: str = os.getenv(
-        "DATABASE_SCHEMA",
-        "public",
-    )
     kb_path: str = os.getenv(
         "KB_PATH",
         str(Path("data") / "kb" / "fitness_knowledge.json"),

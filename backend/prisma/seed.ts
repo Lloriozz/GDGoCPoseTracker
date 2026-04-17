@@ -8,44 +8,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Starting seed...');
 
-  // Create users
-  const passwordHash = await bcrypt.hash('password123', 10);
-  
-  const users = [
-    {
-      email: 'david@example.com',
-      username: 'david_laid',
-      passwordHash,
-      firstName: 'David',
-      lastName: 'Laid'
-    },
-    {
-      email: 'alice@example.com',
-      username: 'alice_fitness',
-      passwordHash,
-      firstName: 'Alice',
-      lastName: 'Burberry'
-    },
-    {
-      email: 'john@example.com',
-      username: 'john_fit',
-      passwordHash,
-      firstName: 'John',
-      lastName: 'Doe'
-    }
-  ];
-
-  const createdUsers = [];
-  for (const user of users) {
-    const createdUser = await prisma.user.upsert({
-      where: { email: user.email },
-      update: {},
-      create: user
-    });
-    createdUsers.push(createdUser);
-  }
-
-  // Create exercises
+  // Seed exercises (required for workout functionality)
   const exercises = [
     {
       name: 'Bicep Curl',
@@ -85,87 +48,83 @@ async function main() {
     });
   }
 
-  // Create forum posts
-  const forumPosts = [
-    {
-      userId: createdUsers[0].id,
-      title: 'Morning Workout Routine',
-      content: 'Just finished an amazing morning workout! Started with 30 minutes of cardio, followed by strength training. Feeling energized and ready to take on the day. #fitness #morningroutine',
-      likes: 15
-    },
-    {
-      userId: createdUsers[1].id,
-      title: 'New PR on Squats!',
-      content: 'Finally hit my personal record on squats today - 225 lbs for 5 reps! Been working towards this goal for months. Consistency really pays off. 💪',
-      likes: 32
-    },
-    {
-      userId: createdUsers[2].id,
-      title: 'Need advice on form',
-      content: 'Been struggling with my deadlift form lately. Any tips on keeping my back straight? I feel like I might be rounding too much.',
-      likes: 8
-    },
-    {
-      userId: createdUsers[0].id,
-      title: 'Best supplements for beginners?',
-      content: 'Just starting my fitness journey and wondering what supplements you guys recommend. Currently just taking protein powder after workouts.',
-      likes: 12
-    },
-    {
-      userId: createdUsers[1].id,
-      title: 'Weekend hiking plans',
-      content: 'Planning a hike this weekend! Anyone have recommendations for good trails in the area? Looking for something moderate difficulty with nice views.',
-      likes: 5
+  // Seed admin user (for system administration)
+  const passwordHash = await bcrypt.hash('admin123', 10);
+  const adminUser = await prisma.userProfile.upsert({
+    where: { email: 'admin@posetracker.com' },
+    update: {},
+    create: {
+      email: 'admin@posetracker.com',
+      username: 'admin',
+      passwordHash,
+      firstName: 'System',
+      lastName: 'Admin'
     }
-  ];
+  });
 
-  const createdPosts = [];
-  for (const post of forumPosts) {
-    const createdPost = await prisma.forumPost.create({
-      data: post
-    });
-    createdPosts.push(createdPost);
-  }
-
-  // Create forum comments
-  const comments = [
-    {
-      userId: createdUsers[1].id,
-      postId: createdPosts[2].id,
-      content: 'Focus on engaging your lats and keeping your core tight. Record yourself from the side to check your form!'
-    },
-    {
-      userId: createdUsers[2].id,
-      postId: createdPosts[2].id,
-      content: 'Definitely start with lighter weight to perfect form. Hip hinges are key!'
-    },
-    {
-      userId: createdUsers[2].id,
-      postId: createdPosts[0].id,
-      content: 'Great job! Morning workouts are the best way to start the day.'
-    },
-    {
-      userId: createdUsers[0].id,
-      postId: createdPosts[1].id,
-      content: 'Congratulations! Thats amazing progress. Keep pushing!'
-    },
-    {
-      userId: createdUsers[2].id,
-      postId: createdPosts[4].id,
-      content: 'Check out the trails at Mountain Park - great views and moderate difficulty.'
-    }
-  ];
-
-  for (const comment of comments) {
-    await prisma.forumComment.create({
-      data: comment
+  // Seed sample workout for admin user
+  const bicepCurl = await prisma.exercise.findUnique({ where: { name: 'Bicep Curl' } });
+  if (bicepCurl) {
+    await prisma.workout.upsert({
+      where: { id: 'sample-workout-id' },
+      update: {},
+      create: {
+        id: 'sample-workout-id',
+        userId: adminUser.id,
+        exerciseId: bicepCurl.id,
+        duration: 180,
+        completed: true,
+        score: 85.5,
+        startedAt: new Date(),
+        completedAt: new Date()
+      }
     });
   }
+
+  // Seed sample forum post
+  await prisma.forumPost.upsert({
+    where: { id: 'welcome-post-id' },
+    update: {},
+    create: {
+      id: 'welcome-post-id',
+      userId: adminUser.id,
+      title: 'Welcome to PoseTracker Community',
+      content: 'Welcome to our fitness community! Share your workout progress and connect with other fitness enthusiasts.',
+      likes: 0
+    }
+  });
+
+  // Seed sample media reference
+  await prisma.media.upsert({
+    where: { id: 'sample-media-id' },
+    update: {},
+    create: {
+      id: 'sample-media-id',
+      userId: adminUser.id,
+      type: 'video',
+      usage: 'training',
+      url: 'https://example.com/sample-video.mp4',
+      mimeType: 'video/mp4',
+      exerciseType: 'bicep_curl'
+    }
+  });
+
+  // Seed sample pose vector
+  await prisma.poseVector.upsert({
+    where: { id: 'sample-pose-vector-id' },
+    update: {},
+    create: {
+      id: 'sample-pose-vector-id',
+      userId: adminUser.id,
+      exerciseType: 'bicep_curl',
+      vectorData: JSON.stringify([0.1, 0.2, 0.3, 0.4])
+    }
+  });
 
   console.log('Seed completed successfully!');
-  console.log(`Created ${createdUsers.length} users`);
-  console.log(`Created ${forumPosts.length} forum posts`);
-  console.log(`Created ${comments.length} comments`);
+  console.log(`Created ${exercises.length} exercises`);
+  console.log('Created admin user');
+  console.log('Created sample workout, forum post, media, and pose vector');
 }
 
 main()
