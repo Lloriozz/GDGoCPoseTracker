@@ -3,6 +3,7 @@ import base64
 import cv2
 import numpy as np
 import mediapipe as mp
+from types import SimpleNamespace
 from channels.generic.websocket import AsyncWebsocketConsumer
 from asgiref.sync import sync_to_async
 
@@ -49,10 +50,47 @@ class PoseConsumer(AsyncWebsocketConsumer):
             return
 
         # Tối ưu 1: static_image_mode=False (Mặc định) giúp MediaPipe dùng tính năng Tracking siêu nhanh thay vì Detection lại từ đầu.
-        self.pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.pose = mp_pose.Pose(
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+            model_complexity=1,
+            smooth_landmarks=True,
+        )
+        self.smoothed_landmarks = None
+        self.smoothing_alpha = 0.35
 
     async def disconnect(self, close_code):
-        pass
+        if hasattr(self, "pose") and self.pose:
+            self.pose.close()
+
+    def _smooth_landmarks(self, landmarks):
+        current = [
+            {
+                "x": lm.x,
+                "y": lm.y,
+                "z": lm.z,
+                "visibility": lm.visibility,
+            }
+            for lm in landmarks
+        ]
+
+        if self.smoothed_landmarks is None:
+            self.smoothed_landmarks = current
+        else:
+            blended = []
+            for prev, curr in zip(self.smoothed_landmarks, current):
+                alpha = self.smoothing_alpha if curr["visibility"] >= 0.5 else self.smoothing_alpha * 0.5
+                blended.append(
+                    {
+                        "x": prev["x"] + alpha * (curr["x"] - prev["x"]),
+                        "y": prev["y"] + alpha * (curr["y"] - prev["y"]),
+                        "z": prev["z"] + alpha * (curr["z"] - prev["z"]),
+                        "visibility": max(curr["visibility"], prev["visibility"] * 0.9),
+                    }
+                )
+            self.smoothed_landmarks = blended
+
+        return [SimpleNamespace(**lm) for lm in self.smoothed_landmarks]
 
     # Tối ưu 2: Gộp việc chạy MediaPipe và Engine vào MỘT hàm đồng bộ duy nhất
     def _process_frame_sync(self, image):
@@ -62,8 +100,8 @@ class PoseConsumer(AsyncWebsocketConsumer):
         if not results.pose_landmarks:
             return None, None
             
-        landmarks = results.pose_landmarks.landmark
-        
+        landmarks = self._smooth_landmarks(results.pose_landmarks.landmark)
+
         # Chạy phân tích AI / Toán học ngay trong cùng thread
         analysis = self.engine.process_frame(landmarks)
         

@@ -17,8 +17,8 @@ class SquatCoachEngine:
     ]
     IMPORTANT_LMS = [0, 11, 12, 23, 24, 25, 26, 27, 28]
 
-    PREDICTION_THRESHOLD = 0.7
-    VIS_THRESH = 0.6
+    PREDICTION_THRESHOLD = 0.65
+    VIS_THRESH = 0.55
     FOOT_SHOULDER_RATIO_THRESHOLDS = (1.2, 2.8)
     KNEE_FOOT_RATIO_THRESHOLDS = {
         "up": (0.5, 1.0),

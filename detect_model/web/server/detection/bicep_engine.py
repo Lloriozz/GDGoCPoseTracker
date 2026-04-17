@@ -14,12 +14,12 @@ class Point:
 class BicepCoachEngine:
     IMPORTANT_LMS = [0, 11, 12, 14, 13, 16, 15, 23, 24] 
     
-    POSTURE_ERROR_THRESHOLD = 0.95
+    POSTURE_ERROR_THRESHOLD = 0.80
     STAGE_UP_THRESHOLD = 100
     STAGE_DOWN_THRESHOLD = 120
     PEAK_CONTRACTION_THRESHOLD = 60
     LOOSE_UPPER_ARM_ANGLE_THRESHOLD = 40
-    VIS_THRESH = 0.65
+    VIS_THRESH = 0.55
 
     def __init__(self):
         model_path = MODEL_DIR / "bicep_curl_model.pkl" 

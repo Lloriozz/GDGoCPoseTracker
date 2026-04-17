@@ -20,7 +20,7 @@ class LungeCoachEngine:
 
         self.current_stage = "init"
         self.counter = 0
-        self.PREDICTION_PROB_THRESHOLD = 0.8
+        self.PREDICTION_PROB_THRESHOLD = 0.70
         self.KNEE_ANGLE_THRESHOLD = [60, 125]
         self.VIS_THRESH = 0.5 # Ngưỡng tin cậy của mắt camera
 
