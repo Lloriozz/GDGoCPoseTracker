@@ -28,7 +28,8 @@ const POSE_CONNECTIONS = [
 
 const SPEECH_COOLDOWN_MS = 4000;
 const LANDMARK_VISIBILITY_THRESHOLD = 0.5;
-const WS_BASE_URL = 'ws://192.168.1.xxx:8000/ws/pose'; // <--- NHỚ SỬA LẠI IP CỦA ÔNG
+const _WS_HOST = process.env.EXPO_PUBLIC_API_IP ?? '124.197.18.178';
+const WS_BASE_URL = `ws://${_WS_HOST}:8000/ws/pose`;
 
 type SessionStatus = 'IDLE' | 'RUNNING' | 'PAUSED';
 

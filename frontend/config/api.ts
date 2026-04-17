@@ -11,10 +11,10 @@ const getApiBaseUrl = () => {
 
   // For Android emulator
   if (__DEV__ && Platform.OS === 'android') {
-    return 'http://192.168.0.109:3000/api';
+    return 'http://124.197.18.178:3000/api';
   }
   // For iOS simulator and web
-  return 'http://192.168.2.58:3000/api';
+  return 'http://124.197.18.178:3000/api';
 };
 
 const getChatApiBaseUrl = () => {
@@ -28,10 +28,10 @@ const getChatApiBaseUrl = () => {
 
   // For Android device/emulator
   if (__DEV__ && Platform.OS === 'android') {
-    return 'http://192.168.0.109:8000';
+    return 'http://124.197.18.178:8000';
   }
   // For iOS simulator and web
-  return 'http://127.0.0.1:8000';
+  return 'http://124.197.18.178:8000';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
