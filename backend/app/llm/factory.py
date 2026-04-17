@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from app.core.config import settings
 from app.llm.base import BaseLLMBackend
-from app.llm.gemma_local import LocalGemmaInferencer
+from app.llm.gemma_local_runtime import LocalGemmaInferencer
 from app.llm.mock_gemma import MockGemmaInferencer
 
 

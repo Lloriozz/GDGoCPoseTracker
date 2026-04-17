@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.core.text_utils import normalize_text
+from app.core.robust_text_utils import robust_normalize_text
 
 
 RED_FLAG_KEYWORDS = {
@@ -26,7 +26,7 @@ class SafetyResult(BaseModel):
 
 class SafetyChecker:
     def evaluate(self, message: str) -> SafetyResult:
-        lowered = normalize_text(message)
+        lowered = robust_normalize_text(message)
         for keyword in RED_FLAG_KEYWORDS:
             if keyword in lowered:
                 return SafetyResult(

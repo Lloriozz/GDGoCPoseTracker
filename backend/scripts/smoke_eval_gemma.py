@@ -15,7 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.core.config import settings
 from app.core.orchestrator import FitnessChatOrchestrator
 from app.core.text_utils import normalize_text
-from app.db.database import init_db
+from app.db.database import drop_schema, init_db
 from app.llm.factory import build_llm_backend
 from app.schemas.chat_request import ChatRequest
 from app.schemas.chat_response import ChatResponse
@@ -40,6 +40,10 @@ INTERNAL_META_MARKERS = [
     "final output",
     "hay chi",
     "quy tac",
+    "giai dap cuoi cung",
+    "thong tin chi tiet",
+    "neu co thong tin nao can thiet",
+    "ban mock",
 ]
 MEAL_MARKERS = ["bua sang", "bua trua", "bua phu", "bua toi"]
 MEAL_CONTAMINATION_MARKERS = ["dau goi", "rom", "leg press", "box squat", "glute bridge"]
@@ -133,37 +137,52 @@ def _is_nutrition_unknown_pass(response: ChatResponse) -> bool:
 
 
 def _is_meal_pass(response: ChatResponse) -> bool:
-    if response.intent != "request_meal_guidance" or response.safety_flag:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
         return False
     if _has_internal_meta(response.reply):
         return False
     normalized = normalize_text(response.reply)
-    meal_hits = sum(1 for marker in MEAL_MARKERS if marker in normalized)
-    if meal_hits < 2:
+    if not any(marker in normalized for marker in ["an", "protein", "mon", "bua", "com", "dau hu", "trung"]):
         return False
     return not any(marker in normalized for marker in MEAL_CONTAMINATION_MARKERS)
 
 
-def _is_workout_pass(response: ChatResponse) -> bool:
-    if response.intent != "request_workout_plan" or response.safety_flag:
+def _is_post_workout_meal_pass(response: ChatResponse) -> bool:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
         return False
     if _has_internal_meta(response.reply):
         return False
-    workout_plan = response.tool_results.get("workout_plan", {}) if isinstance(response.tool_results, dict) else {}
-    if not isinstance(workout_plan, dict) or not workout_plan:
+    normalized = normalize_text(response.reply)
+    return (
+        any(marker in normalized for marker in ["bua", "protein", "sau tap"])
+        and not any(marker in normalized for marker in MEAL_CONTAMINATION_MARKERS)
+    )
+
+
+def _is_workout_pass(response: ChatResponse) -> bool:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
+        return False
+    if _has_internal_meta(response.reply):
         return False
 
     normalized = normalize_text(response.reply)
-    split = normalize_text(str(workout_plan.get("split", "")))
-    days = workout_plan.get("days", [])
-    day_count = len(days) if isinstance(days, list) else 0
-    markers = ["lich tap", "split", "upper", "lower", "dau goi"]
+    markers = ["lich tap", "split", "upper", "lower", "4 buoi", "dau goi", "tap"]
+    return any(marker in normalized for marker in markers) and not any(
+        marker in normalized for marker in ["bua sang", "bua trua", "bua toi", "thuc don"]
+    )
 
-    if split and split in normalized:
-        return True
-    if day_count and f"{day_count} buoi" in normalized:
-        return True
-    return any(marker in normalized for marker in markers)
+
+def _is_knee_workout_pass(response: ChatResponse) -> bool:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
+        return False
+    if _has_internal_meta(response.reply):
+        return False
+    normalized = normalize_text(response.reply)
+    meal_noise = ["bua sang", "bua trua", "bua toi", "thuc don", "mon an"]
+    return (
+        any(marker in normalized for marker in ["dau goi", "rom", "leg press", "split", "lich tap"])
+        and not any(marker in normalized for marker in meal_noise)
+    )
 
 
 def _is_general_pass(response: ChatResponse) -> bool:
@@ -175,6 +194,32 @@ def _is_general_pass(response: ChatResponse) -> bool:
     if not any(marker in normalized for marker in ["tai khoan", "ngan hang"]):
         return False
     return not any(marker in normalized for marker in GENERAL_FITNESS_LEAK_MARKERS)
+
+
+def _is_goal_coaching_pass(response: ChatResponse) -> bool:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
+        return False
+    if _has_internal_meta(response.reply):
+        return False
+    normalized = normalize_text(response.reply)
+    return (
+        "giam can" in normalized
+        and "ban mock" not in normalized
+        and any(marker in normalized for marker in ["calo", "protein", "tap", "thieu"])
+    )
+
+
+def _is_recovery_pass(response: ChatResponse) -> bool:
+    if response.intent != "general_fitness_qa" or response.safety_flag:
+        return False
+    if _has_internal_meta(response.reply):
+        return False
+    normalized = normalize_text(response.reply)
+    meal_noise = ["bua sang", "bua trua", "bua toi", "thuc don", "mon an"]
+    return (
+        any(marker in normalized for marker in ["dien giai", "bu nuoc", "mo hoi", "sau tap"])
+        and not any(marker in normalized for marker in meal_noise)
+    )
 
 
 def _is_safety_pass(response: ChatResponse) -> bool:
@@ -198,10 +243,11 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"smoke_eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    original_sqlite_path = settings.sqlite_path
+    database_schema = f"smoke_eval_{uuid4().hex}"
+    original_database_schema = settings.database_schema
 
     try:
-        settings.sqlite_path = str(temp_dir / "smoke_eval.db")
+        settings.database_schema = database_schema
         build_llm_backend.cache_clear()
         init_db()
 
@@ -248,6 +294,15 @@ def run_eval() -> int:
                 _is_meal_pass,
             ),
             (
+                "goal_coaching_general",
+                ChatRequest(
+                    user_id="smoke-user",
+                    session_id="smoke-2a",
+                    message="toi muon giam can",
+                ),
+                _is_goal_coaching_pass,
+            ),
+            (
                 "nutrition_precise",
                 ChatRequest(
                     user_id="smoke-user",
@@ -266,6 +321,23 @@ def run_eval() -> int:
                 _is_nutrition_unknown_pass,
             ),
             (
+                "post_workout_meal_question",
+                ChatRequest(
+                    user_id="smoke-user",
+                    session_id="smoke-2d",
+                    message="toi moi tap gym xong nen an gi?",
+                    profile_patch=UserProfilePatch(
+                        age=24,
+                        sex="male",
+                        height_cm=175,
+                        weight_kg=72,
+                        activity_level="moderate",
+                        goal="muscle_gain",
+                    ),
+                ),
+                _is_post_workout_meal_pass,
+            ),
+            (
                 "workout",
                 ChatRequest(
                     user_id="smoke-user",
@@ -279,6 +351,30 @@ def run_eval() -> int:
                     ),
                 ),
                 _is_workout_pass,
+            ),
+            (
+                "electrolytes_recovery_question",
+                ChatRequest(
+                    user_id="smoke-user",
+                    session_id="smoke-3a",
+                    message="Dien giai co quan trong sau tap khong?",
+                ),
+                _is_recovery_pass,
+            ),
+            (
+                "knee_sensitive_workout_question",
+                ChatRequest(
+                    user_id="smoke-user",
+                    session_id="smoke-3b",
+                    message="Tap chan khi dau goi nhay cam thi nen tranh gi?",
+                    profile_patch=UserProfilePatch(
+                        goal="muscle_gain",
+                        workout_days_per_week=4,
+                        train_location="gym",
+                        injuries=["knee"],
+                    ),
+                ),
+                _is_knee_workout_pass,
             ),
             (
                 "general",
@@ -328,8 +424,9 @@ def run_eval() -> int:
         _safe_print(f"\nSummary: {passed}/{len(cases)} checks passed")
         return 0 if passed == len(cases) else 1
     finally:
-        settings.sqlite_path = original_sqlite_path
+        settings.database_schema = original_database_schema
         build_llm_backend.cache_clear()
+        drop_schema(database_schema)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 

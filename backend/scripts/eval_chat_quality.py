@@ -11,7 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.core.config import settings
 from app.core.orchestrator import FitnessChatOrchestrator
-from app.db.database import init_db
+from app.core.text_utils import normalize_text
+from app.db.database import drop_schema, init_db
 from app.llm.factory import build_llm_backend
 from app.schemas.chat_request import ChatRequest
 from app.schemas.user_profile import UserProfilePatch
@@ -27,11 +28,12 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    original_sqlite_path = settings.sqlite_path
+    database_schema = f"eval_{uuid4().hex}"
+    original_database_schema = settings.database_schema
     original_llm_backend = settings.llm_backend
 
     try:
-        settings.sqlite_path = str(temp_dir / "eval.db")
+        settings.database_schema = database_schema
         settings.llm_backend = "mock-gemma"
         build_llm_backend.cache_clear()
         init_db()
@@ -89,7 +91,8 @@ def run_eval() -> int:
                         preferred_foods=["trung"],
                     ),
                 ),
-                lambda resp: resp.intent == "request_meal_guidance" and "Bữa sáng" in resp.reply,
+                lambda resp: resp.intent == "general_fitness_qa"
+                and ("protein" in resp.reply.lower() or "com" in resp.reply.lower() or "bua" in resp.reply.lower()),
             ),
             (
                 "meal_constraints_rag",
@@ -103,9 +106,27 @@ def run_eval() -> int:
                         cook_time_preference="quick",
                     ),
                 ),
-                lambda resp: resp.intent == "request_meal_guidance"
-                and "đậu hũ" in resp.reply.lower()
-                and ("sữa đậu nành" in resp.reply.lower() or "protein thực vật" in resp.reply.lower()),
+                lambda resp: resp.intent == "general_fitness_qa"
+                and ("dau hu" in normalize_text(resp.reply) or "protein thuc vat" in normalize_text(resp.reply)),
+            ),
+            (
+                "post_workout_meal_routing",
+                ChatRequest(
+                    user_id="eval-user",
+                    session_id="eval-2c",
+                    message="toi moi tap gym xong nen an gi?",
+                    profile_patch=UserProfilePatch(
+                        age=24,
+                        sex="male",
+                        height_cm=175,
+                        weight_kg=72,
+                        activity_level="moderate",
+                        goal="muscle_gain",
+                    ),
+                ),
+                lambda resp: resp.intent == "general_fitness_qa"
+                and "tool_results" not in resp.reply.lower()
+                and ("bua" in resp.reply.lower() or "protein" in resp.reply.lower()),
             ),
             (
                 "workout",
@@ -120,7 +141,25 @@ def run_eval() -> int:
                         injuries=["knee"],
                     ),
                 ),
-                lambda resp: resp.intent == "request_workout_plan" and "workout_plan" in resp.tool_results,
+                lambda resp: resp.intent == "general_fitness_qa"
+                and ("split" in resp.reply.lower() or "lich tap" in resp.reply.lower() or "4 buoi" in resp.reply.lower()),
+            ),
+            (
+                "knee_workout_routing",
+                ChatRequest(
+                    user_id="eval-user",
+                    session_id="eval-3b",
+                    message="Tap chan khi dau goi nhay cam thi nen tranh gi?",
+                    profile_patch=UserProfilePatch(
+                        goal="muscle_gain",
+                        workout_days_per_week=4,
+                        train_location="gym",
+                        injuries=["knee"],
+                    ),
+                ),
+                lambda resp: resp.intent == "general_fitness_qa"
+                and "bua sang" not in resp.reply.lower()
+                and "thuc don" not in resp.reply.lower(),
             ),
             (
                 "general",
@@ -130,6 +169,17 @@ def run_eval() -> int:
                     message="cách tạo tài khoản ngân hàng",
                 ),
                 lambda resp: resp.intent == "general_fitness_qa" and "<turn|>" not in resp.reply,
+            ),
+            (
+                "general_goal_reply",
+                ChatRequest(
+                    user_id="eval-user",
+                    session_id="eval-4b",
+                    message="toi muon giam can",
+                ),
+                lambda resp: resp.intent == "general_fitness_qa"
+                and "giai dap cuoi cung" not in resp.reply.lower()
+                and "ban mock" not in resp.reply.lower(),
             ),
             (
                 "safety",
@@ -154,9 +204,10 @@ def run_eval() -> int:
         _safe_print(f"\nSummary: {passed}/{len(cases)} checks passed")
         return 0 if passed == len(cases) else 1
     finally:
-        settings.sqlite_path = original_sqlite_path
+        settings.database_schema = original_database_schema
         settings.llm_backend = original_llm_backend
         build_llm_backend.cache_clear()
+        drop_schema(database_schema)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 

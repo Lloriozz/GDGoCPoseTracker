@@ -8,8 +8,60 @@ from typing import Any
 
 from app.core.text_utils import normalize_text
 from app.llm.base import BaseLLMBackend
-from app.llm.mock_gemma import MockGemmaInferencer
 
+PROMPT_LEAK_LABEL_PATTERN = re.compile(r"^[A-Z][A-Z0-9_ ]{5,}:")
+PROMPT_LEAK_LINE_PREFIXES = (
+    "user_context",
+    "user_context_final",
+    "profile_final",
+    "profile hien tai",
+    "profile lien quan",
+    "cau hoi hien tai",
+    "cau hoi cuoi cung",
+    "user dang hoi",
+    "yeu cau hien tai",
+    "ngu canh truoc do",
+    "thong tin tham khao neu lien quan",
+    "thong tin tham khao lien quan",
+    "thongtin tham khao lien quan",
+    "khung so lieu hien co",
+    "khung lich tap hien co",
+    "goi y tap luyen lien quan",
+    "goi y nen",
+    "cac muc chua co trong catalog",
+    "phan da tinh bang catalog hien co",
+    "kinh nghiem tap",
+    "muc tieu",
+    "muc van dong",
+    "so buoi tap/tuan",
+    "thoi gian nau",
+    "ngan sach",
+    "mon ua thich",
+    "mon khong thich",
+)
+PROMPT_LEAK_MARKERS = (
+    "user_context",
+    "user_context_final",
+    "profile_final",
+    "profile hien tai",
+    "profile lien quan",
+    "cau hoi hien tai",
+    "cau hoi cuoi cung",
+    "thong tin tham khao neu lien quan",
+    "thong tin tham khao lien quan",
+    "thongtin tham khao lien quan",
+    "khung so lieu hien co",
+    "khung lich tap hien co",
+    "goi y tap luyen lien quan",
+    "goi y nen",
+    "tool_results",
+    "response_rules",
+    "system_prompt",
+    "profile hien dai",
+    "profile hieuplan",
+)
+CUDA_DEVICE_MODES = {"cuda", "auto"}
+QUANTIZED_MODES = {"4bit", "8bit"}
 
 NON_LATIN_NOISE_PATTERN = re.compile(
     r"[\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u0C00-\u0C7F\u0E00-\u0E7F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]"
@@ -50,7 +102,6 @@ class LocalGemmaInferencer(BaseLLMBackend):
         self._processor: Any | None = None
         self._model: Any | None = None
         self._torch: Any | None = None
-        self._fallback_backend = MockGemmaInferencer()
 
     def generate(self, prompt: dict[str, object]) -> str:
         self._ensure_loaded()
@@ -95,47 +146,22 @@ class LocalGemmaInferencer(BaseLLMBackend):
         if cleaned_decoded:
             return self._ground_response(cleaned_decoded, prompt)
 
-        return self._fallback_backend.generate(prompt)
+        return self._fallback_for_prompt(prompt)
 
     def _ensure_loaded(self) -> None:
         if self._model is not None and self._processor is not None:
             return
 
-        try:
-            import torch
-            from transformers import AutoConfig, AutoModelForCausalLM, AutoProcessor, Gemma4ForConditionalGeneration
-        except ImportError as exc:
-            raise RuntimeError(
-                "Local Gemma backend requires a Transformers build that includes Gemma 4 support, "
-                "along with `torch`. Install a newer/main Transformers build before using "
-                "`LLM_BACKEND=local-transformers`."
-            ) from exc
-
+        runtime = self._load_transformers_runtime()
+        torch = runtime["torch"]
         self._torch = torch
         self._validate_runtime(torch)
 
         pretrained_kwargs = self._build_pretrained_kwargs()
-        processor_kwargs = {"trust_remote_code": self.trust_remote_code, **pretrained_kwargs}
-        model_kwargs = self._build_model_kwargs(torch)
-
-        try:
-            config = AutoConfig.from_pretrained(
-                self.model_id,
-                trust_remote_code=self.trust_remote_code,
-                **pretrained_kwargs,
-            )
-        except ValueError as exc:
-            raise RuntimeError(
-                "The installed Transformers version does not recognize this Gemma 4 checkpoint yet. "
-                "Try installing Transformers from source: "
-                "`python -m pip install git+https://github.com/huggingface/transformers`"
-            ) from exc
-        self._processor = AutoProcessor.from_pretrained(self.model_id, **processor_kwargs)
-
-        if getattr(config, "model_type", "") == "gemma4":
-            model_cls = Gemma4ForConditionalGeneration
-        else:
-            model_cls = AutoModelForCausalLM
+        config = self._load_model_config(runtime, pretrained_kwargs)
+        self._processor = self._load_processor(runtime, pretrained_kwargs)
+        model_cls = self._select_model_class(config, runtime)
+        model_kwargs = self._build_model_kwargs(runtime)
 
         try:
             self._model = self._load_model_with_retry(model_cls, model_kwargs)
@@ -151,8 +177,60 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 ) from exc
             raise
 
-        if self.quantization.strip().lower() == "none" and self.device not in {"auto", "cuda"}:
-            self._model.to(self.device)
+        self._move_model_to_explicit_device_if_needed()
+
+    def _load_transformers_runtime(self) -> dict[str, Any]:
+        try:
+            import torch
+            from transformers import AutoConfig, AutoModelForCausalLM, AutoProcessor, Gemma4ForConditionalGeneration
+        except ImportError as exc:
+            raise RuntimeError(
+                "Local Gemma backend requires a Transformers build that includes Gemma 4 support, "
+                "along with `torch`. Install a newer/main Transformers build before using "
+                "`LLM_BACKEND=local-transformers`."
+            ) from exc
+
+        return {
+            "torch": torch,
+            "AutoConfig": AutoConfig,
+            "AutoModelForCausalLM": AutoModelForCausalLM,
+            "AutoProcessor": AutoProcessor,
+            "Gemma4ForConditionalGeneration": Gemma4ForConditionalGeneration,
+        }
+
+    def _load_model_config(self, runtime: dict[str, Any], pretrained_kwargs: dict[str, Any]) -> Any:
+        auto_config = runtime["AutoConfig"]
+        try:
+            return auto_config.from_pretrained(
+                self.model_id,
+                trust_remote_code=self.trust_remote_code,
+                **pretrained_kwargs,
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "The installed Transformers version does not recognize this Gemma 4 checkpoint yet. "
+                "Try installing Transformers from source: "
+                "`python -m pip install git+https://github.com/huggingface/transformers`"
+            ) from exc
+
+    def _load_processor(self, runtime: dict[str, Any], pretrained_kwargs: dict[str, Any]) -> Any:
+        auto_processor = runtime["AutoProcessor"]
+        processor_kwargs = {"trust_remote_code": self.trust_remote_code, **pretrained_kwargs}
+        return auto_processor.from_pretrained(self.model_id, **processor_kwargs)
+
+    def _select_model_class(self, config: Any, runtime: dict[str, Any]) -> Any:
+        if getattr(config, "model_type", "") == "gemma4":
+            return runtime["Gemma4ForConditionalGeneration"]
+        return runtime["AutoModelForCausalLM"]
+
+    def _move_model_to_explicit_device_if_needed(self) -> None:
+        if self._model is None:
+            return
+        if self.quantization_mode != "none":
+            return
+        if self.device_mode in CUDA_DEVICE_MODES:
+            return
+        self._model.to(self.device)
 
     def _load_model_with_retry(self, model_cls: Any, model_kwargs: dict[str, Any]) -> Any:
         try:
@@ -191,23 +269,34 @@ class LocalGemmaInferencer(BaseLLMBackend):
         gc.collect()
         self._torch.cuda.empty_cache()
 
-    def _build_model_kwargs(self, torch: Any) -> dict[str, Any]:
-        quantization_mode = self.quantization.strip().lower()
-        model_kwargs: dict[str, Any] = {
+    @property
+    def device_mode(self) -> str:
+        return self.device.strip().lower()
+
+    @property
+    def quantization_mode(self) -> str:
+        return self.quantization.strip().lower()
+
+    def _build_model_kwargs(self, runtime: dict[str, Any]) -> dict[str, Any]:
+        model_kwargs = self._build_base_model_kwargs()
+        if self.quantization_mode == "none":
+            return self._build_unquantized_model_kwargs(runtime["torch"], model_kwargs)
+        return self._build_quantized_model_kwargs(runtime["torch"], model_kwargs)
+
+    def _build_base_model_kwargs(self) -> dict[str, Any]:
+        return {
             "trust_remote_code": self.trust_remote_code,
             "use_safetensors": True,
             **self._build_pretrained_kwargs(),
         }
 
-        if quantization_mode == "none":
-            model_kwargs["torch_dtype"] = self._resolve_torch_dtype(torch)
-            if self.device in {"auto", "cuda"}:
-                model_kwargs["device_map"] = "auto"
-                model_kwargs["max_memory"] = self._build_max_memory()
-                if self.offload_buffers:
-                    model_kwargs["offload_buffers"] = True
-            return model_kwargs
+    def _build_unquantized_model_kwargs(self, torch: Any, model_kwargs: dict[str, Any]) -> dict[str, Any]:
+        model_kwargs["torch_dtype"] = self._resolve_torch_dtype(torch)
+        if self.device_mode in CUDA_DEVICE_MODES:
+            self._apply_auto_device_map(model_kwargs)
+        return model_kwargs
 
+    def _build_quantized_model_kwargs(self, torch: Any, model_kwargs: dict[str, Any]) -> dict[str, Any]:
         try:
             from transformers import BitsAndBytesConfig
         except ImportError as exc:
@@ -215,32 +304,33 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 "Quantized Gemma inference requires `bitsandbytes` in addition to `transformers` and `torch`."
             ) from exc
 
-        if quantization_mode == "4bit":
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+        model_kwargs["quantization_config"] = self._build_quantization_config(torch, BitsAndBytesConfig)
+        self._apply_auto_device_map(model_kwargs)
+        return model_kwargs
+
+    def _build_quantization_config(self, torch: Any, config_cls: Any) -> Any:
+        if self.quantization_mode == "4bit":
+            return config_cls(
                 load_in_4bit=True,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=self._resolve_torch_dtype(torch),
                 llm_int8_enable_fp32_cpu_offload=self.cpu_offload,
             )
-            model_kwargs["device_map"] = "auto"
-            model_kwargs["max_memory"] = self._build_max_memory()
-            if self.offload_buffers:
-                model_kwargs["offload_buffers"] = True
-            return model_kwargs
 
-        if quantization_mode == "8bit":
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+        if self.quantization_mode == "8bit":
+            return config_cls(
                 load_in_8bit=True,
                 llm_int8_enable_fp32_cpu_offload=self.cpu_offload,
             )
-            model_kwargs["device_map"] = "auto"
-            model_kwargs["max_memory"] = self._build_max_memory()
-            if self.offload_buffers:
-                model_kwargs["offload_buffers"] = True
-            return model_kwargs
 
         raise ValueError(f"Unsupported GEMMA_QUANTIZATION mode: {self.quantization}")
+
+    def _apply_auto_device_map(self, model_kwargs: dict[str, Any]) -> None:
+        model_kwargs["device_map"] = "auto"
+        model_kwargs["max_memory"] = self._build_max_memory()
+        if self.offload_buffers:
+            model_kwargs["offload_buffers"] = True
 
     def _build_pretrained_kwargs(self) -> dict[str, Any]:
         if self._is_local_path():
@@ -251,7 +341,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
         return Path(self.model_id).exists()
 
     def _build_max_memory(self) -> dict[Any, str]:
-        if self.device.strip().lower() not in {"cuda", "auto"}:
+        if self.device_mode not in CUDA_DEVICE_MODES:
             return {"cpu": f"{self.cpu_memory_limit_mb}MiB"}
 
         gpu_index: Any = 0
@@ -261,15 +351,12 @@ class LocalGemmaInferencer(BaseLLMBackend):
         }
 
     def _validate_runtime(self, torch: Any) -> None:
-        device = self.device.strip().lower()
-        quantization_mode = self.quantization.strip().lower()
-
-        if device == "cuda" and not torch.cuda.is_available():
+        if self.device_mode == "cuda" and not torch.cuda.is_available():
             raise RuntimeError(
                 "GEMMA_DEVICE is set to `cuda` but CUDA is not available in this environment."
             )
 
-        if quantization_mode in {"4bit", "8bit"} and device not in {"cuda", "auto"}:
+        if self.quantization_mode in QUANTIZED_MODES and self.device_mode not in CUDA_DEVICE_MODES:
             raise RuntimeError(
                 "Quantized Gemma inference currently expects GEMMA_DEVICE to be `cuda` or `auto`."
             )
@@ -303,27 +390,25 @@ class LocalGemmaInferencer(BaseLLMBackend):
         base_system = str(prompt.get("system_prompt", "")).strip()
         intent = str(prompt.get("intent", "general_fitness_qa"))
         shared_rules = (
-            "Không được lặp lại user message. "
-            "Không được xuất markdown code fence. "
-            "Không được viết các nhãn như Final Answer. "
-            "Không được nhắc đến tên trường nội bộ như TOOL_RESULTS, TOOL_SETTINGS, RESPONSE_RULES, INTENT hay SAFETY CASE. "
-            "Nếu có số trong tool results thì phải dùng đúng các số đó, không tự làm tròn."
+            "Tra loi bang tieng Viet tu nhien, khong lap lai cau hoi cua user. "
+            "Khong nhac den prompt, tool_results, response_rules, intent, history hay nhan noi bo. "
+            "Khong viet cac nhan nhu Final Answer, Response hay Giai dap cuoi cung. "
+            "Neu da co so lieu tu tool thi dung dung cac so do."
         )
         if intent == "nutrition_llm_fallback":
             persona_rules = (
-                "Bạn đang đóng vai một trợ lý hữu ích nói tiếng Việt, chuyên ước lượng dinh dưỡng thực dụng. "
-                "Hãy trả lời ngắn gọn, tự nhiên, và nêu rất rõ đây chỉ là ước lượng low-confidence khi catalog chưa có dữ liệu."
+                "Ban la tro ly huu ich noi tieng Viet, chuyen uoc luong dinh duong thuc dung. "
+                "Hay tra loi ngan gon, than trong, va noi ro day chi la uoc luong low-confidence neu catalog chua co du lieu."
             )
         elif intent == "general_fitness_qa":
             persona_rules = (
-                "Bạn đang đóng vai một trợ lý hữu ích nói tiếng Việt. "
-                "Hãy trả lời trực tiếp, tự nhiên, thực tế và không cố lái câu trả lời về fitness nếu câu hỏi không liên quan. "
-                "Nếu có dữ liệu tool hoặc knowledge context thật sự liên quan thì dùng chúng để trả lời chắc hơn."
+                "Ban la tro ly huu ich noi tieng Viet. "
+                "Tra loi truc tiep, thuc te, va chi dua vao knowledge context neu no that su lien quan voi cau hoi hien tai."
             )
         else:
             persona_rules = (
-                "Bạn đang đóng vai một trợ lý fitness nói tiếng Việt. "
-                "Hãy đưa ra câu trả lời trực tiếp, tự nhiên, hữu ích và bám sát tool results nếu đã có."
+                "Ban la tro ly fitness noi tieng Viet. "
+                "Tra loi truc tiep, huu ich, va bam sat tool results neu da co."
             )
         return "\n".join(part for part in [base_system, persona_rules, shared_rules] if part)
 
@@ -348,64 +433,80 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 float(known_totals.get(key, 0) or 0) > 0 for key in ("calories", "protein_g", "carb_g", "fat_g")
             ):
                 known_totals_text = (
-                    "Phần đã tính bằng catalog hiện có:\n"
+                    "Phan da tinh bang catalog hien co:\n"
                     f"- {known_totals.get('calories', 0)} kcal | "
                     f"{known_totals.get('protein_g', 0)}g protein | "
                     f"{known_totals.get('carb_g', 0)}g carb | "
                     f"{known_totals.get('fat_g', 0)}g fat"
                 )
             parts = [
-                f"Yêu cầu gốc của user: {message}",
-                f"Các mục chưa có trong catalog:\n{rendered_items}" if rendered_items else "",
+                f"Yeu cau hien tai: {message}",
+                f"Cac muc chua co trong catalog:\n{rendered_items}" if rendered_items else "",
                 known_totals_text,
-                f"Nhiệm vụ trả lời: {answer_brief}" if answer_brief else "",
+                answer_brief if answer_brief else "",
             ]
             return "\n\n".join(part for part in parts if part)
 
         if intent == "general_fitness_qa":
             parts = [
                 f"Cau hoi hien tai: {message}",
-                f"Ngữ cảnh trước đó:\n{history}" if history else "",
-                f"Goi y lien quan:\n{kb_context}" if kb_context else "",
-                f"Nhiem vu tra loi: {answer_brief}" if answer_brief else "",
+                f"Profile lien quan: {profile_summary}" if profile_summary else "",
+                f"Ngu canh truoc do:\n{history}" if history else "",
+                f"Thong tin tham khao neu lien quan:\n{kb_context}" if kb_context else "",
+            ]
+            return "\n\n".join(part for part in parts if part)
+
+        if intent == "request_meal_guidance":
+            parts = [
+                f"User dang hoi: {message}",
+                f"Profile lien quan: {profile_summary}" if profile_summary else "",
+                f"Luu y them: {personalization_summary}" if personalization_summary else "",
+                f"Khung so lieu hien co:\n{tool_results}" if tool_results not in ("", "{}", "[]") else "",
+                f"Goi y nen:\n{kb_context}" if kb_context else "",
+                answer_brief if answer_brief else "",
+            ]
+            return "\n\n".join(part for part in parts if part)
+
+        if intent == "request_workout_plan":
+            parts = [
+                f"User dang hoi: {message}",
+                f"Profile lien quan: {profile_summary}" if profile_summary else "",
+                f"Luu y them: {personalization_summary}" if personalization_summary else "",
+                f"Khung lich tap hien co:\n{tool_results}" if tool_results not in ("", "{}", "[]") else "",
+                f"Goi y tap luyen lien quan:\n{kb_context}" if kb_context else "",
+                answer_brief if answer_brief else "",
+            ]
+            return "\n\n".join(part for part in parts if part)
+
+        if intent == "request_tdee_macro":
+            parts = [
+                f"User dang hoi: {message}",
+                f"Profile lien quan: {profile_summary}" if profile_summary else "",
+                f"So lieu hien co:\n{tool_results}" if tool_results not in ("", "{}", "[]") else "",
+                answer_brief if answer_brief else "",
             ]
             return "\n\n".join(part for part in parts if part)
 
         parts = [
-            "Đây là dữ liệu để trả lời cho user.",
-            f"Intent: {intent}",
-            f"Profile: {profile_summary}" if profile_summary else "",
-            f"Personalization: {personalization_summary}" if personalization_summary else "",
-            f"History:\n{history}" if history else "",
-            f"Tool results:\n{tool_results}" if tool_results not in ("", "{}", "[]") else "",
-            f"Knowledge context:\n{kb_context}" if kb_context else "",
-            f"Yêu cầu hiện tại của user: {message}",
-            f"Nhiệm vụ trả lời: {answer_brief}" if answer_brief else "",
+            f"User dang hoi: {message}",
+            f"Profile lien quan: {profile_summary}" if profile_summary else "",
+            f"Luu y them: {personalization_summary}" if personalization_summary else "",
+            f"Thong tin bo sung:\n{tool_results}" if tool_results not in ("", "{}", "[]") else "",
+            f"Context lien quan:\n{kb_context}" if kb_context else "",
+            answer_brief if answer_brief else "",
         ]
         return "\n\n".join(part for part in parts if part)
 
     def _build_answer_brief(self, prompt: dict[str, object]) -> str:
         intent = str(prompt.get("intent", "general_fitness_qa"))
         briefs = {
-            "request_tdee_macro": (
-                "Tóm tắt ngắn gọn calories mục tiêu và macro theo đúng số trong dữ liệu."
-            ),
-            "request_meal_guidance": (
-                "Tạo khung 3-5 bữa ăn rõ ràng, mỗi bữa có ví dụ món ngắn gọn và dễ hiểu."
-            ),
-            "request_workout_plan": (
-                "Viết 1 đoạn ngắn câu theo kiểu coach, tóm tắt split, số buổi, lý do chọn lịch và 1-2 lưu ý quan trọng nếu có chấn thương. "
-                "Không liệt kê toàn bộ bài tập từng ngày trừ khi user hỏi."
-            ),
-            "general_fitness_qa": (
-                "Trả lời trực tiếp câu hỏi hiện tại một cách hữu ích và tự nhiên, không nhắc đến dữ liệu hay quy tắc nội bộ."
-            ),
-            "nutrition_llm_fallback": (
-                "Ước lượng sơ bộ cho từng mục chưa có trong catalog; nếu cần thì đưa ra khoảng kcal thay vì một con số cứng. "
-                "Phải nói rõ đây là ước lượng low-confidence và khuyên user nhập tên cụ thể hơn hoặc gram nếu muốn sát hơn."
-            ),
+            "request_tdee_macro": "Tom tat ngan gon calories muc tieu va macro theo dung so trong du lieu.",
+            "request_meal_guidance": "Tao khung 3-5 bua an ro rang, moi bua co vi du mon ngan gon va de hieu.",
+            "request_workout_plan": "Viet 1 doan ngan kieu coach, tom tat split, so buoi, ly do chon lich va 1-2 luu y quan trong neu co chan thuong.",
+            "general_fitness_qa": "",
+            "nutrition_llm_fallback": "Uoc luong so bo cho tung muc chua co trong catalog, neu can thi dua ra khoang kcal thay vi mot con so cung. Noi ro day la uoc luong low-confidence.",
         }
-        return briefs.get(intent, "Trả lời trực tiếp và hữu ích cho user.")
+        return briefs.get(intent, "")
 
     def _format_tool_context(self, prompt: dict[str, object]) -> str:
         intent = str(prompt.get("intent", ""))
@@ -427,11 +528,12 @@ class LocalGemmaInferencer(BaseLLMBackend):
             return formatted
 
         concise_entries: list[str] = []
-        for item in kb_context[:2]:
+        for item in kb_context[:3]:
             if not isinstance(item, dict):
                 continue
             category = str(item.get("category", ""))
-            if not category.startswith(("workout", "recovery")):
+            section = str(item.get("section", ""))
+            if not (category.startswith(("workout", "recovery")) or section in {"workout", "recovery"}):
                 continue
             title = str(item.get("title", "")).strip()
             content = str(item.get("content", "")).strip()
@@ -456,9 +558,9 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
         parts = [
             f"Split: {split}" if split else "",
-            f"Số buổi: {len(days)}" if isinstance(days, list) and days else "",
-            f"Mục tiêu: {goal}" if goal else "",
-            f"Nơi tập: {train_location}" if train_location else "",
+            f"So buoi: {len(days)}" if isinstance(days, list) and days else "",
+            f"Muc tieu: {goal}" if goal else "",
+            f"Noi tap: {train_location}" if train_location else "",
         ]
 
         day_summaries: list[str] = []
@@ -479,7 +581,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 segment = f"- {day_name}: {focus}" if day_name or focus else ""
                 if main_exercises:
                     exercise_text = ", ".join(main_exercises)
-                    segment = f"{segment}. Bài chính: {exercise_text}." if segment else f"- Bài chính: {exercise_text}."
+                    segment = f"{segment}. Bai chinh: {exercise_text}." if segment else f"- Bai chinh: {exercise_text}."
                 if segment:
                     day_summaries.append(segment)
 
@@ -487,7 +589,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
         if isinstance(notes, list) and notes:
             kept_notes = [str(note).strip() for note in notes[:2] if str(note).strip()]
             if kept_notes:
-                notes_summary = "Lưu ý chính: " + "; ".join(kept_notes) + "."
+                notes_summary = "Luu y chinh: " + "; ".join(kept_notes) + "."
 
         sections = [part for part in parts if part]
         if notes_summary:
@@ -584,7 +686,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
             return ""
 
         if self._looks_like_echo(cleaned, normalized_user):
-            return self._fallback_backend.generate(prompt)
+            return self._fallback_for_prompt(prompt)
 
         return cleaned
 
@@ -601,195 +703,150 @@ class LocalGemmaInferencer(BaseLLMBackend):
                     str(macros.get("carb_g")),
                 ]
                 if not all(value in text for value in expected_values):
-                    return self._fallback_backend.generate(prompt)
-        if intent == "request_meal_guidance":
-            if (
-                self._contains_internal_meta(text)
-                or self._contains_meal_planning_meta(text)
-                or not self._looks_like_meal_guidance(text)
-            ):
-                return self._fallback_backend.generate(prompt)
-        if intent == "request_workout_plan":
-            if (
-                self._contains_internal_meta(text)
-                or self._contains_generation_noise(text)
-                or self._contains_workout_planning_meta(text)
-                or not self._looks_like_workout_guidance(text, prompt)
-            ):
-                return self._fallback_backend.generate(prompt)
+                    return self._fallback_for_prompt(prompt)
+        if self._contains_generation_noise(text):
+            return self._fallback_for_prompt(prompt)
+
+        normalized = normalize_text(text)
         if intent == "general_fitness_qa":
-            if self._looks_invalid_general_response(text):
-                return self._fallback_backend.generate(prompt)
+            invalid_markers = [
+                "neu co thong tin nao can thiet",
+                "giai dap cuoi cung",
+                "thong tin chi tiet",
+                "trang vu",
+                "trinh vu",
+                "intent:",
+                "profile:",
+                "tool results",
+                "tool_results",
+                "history:",
+                "ban mock",
+            ]
+            if any(marker in normalized for marker in invalid_markers):
+                return self._fallback_for_prompt(prompt)
         if intent == "nutrition_llm_fallback":
-            if self._looks_invalid_nutrition_fallback_response(text):
-                return self._fallback_backend.generate(prompt)
+            invalid_markers = [
+                "intent:",
+                "tool results",
+                "tool_results",
+                "history:",
+                "profile:",
+                "ban mock",
+            ]
+            if any(marker in normalized for marker in invalid_markers):
+                return self._fallback_for_prompt(prompt)
         return text
 
-    def _contains_internal_meta(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        forbidden_markers = [
-            "tool_results",
-            "tool settings",
-            "tool_settings",
-            "response_rules",
-            "kb_context",
-            "knowledge base",
-            "knowledge context",
-            "intent:",
-            "profile:",
-            "history:",
-            "safety case",
-            "quy tac noi bo",
-            "quy tac sau",
-            "hay chi tra loi",
-            "hay chi su dung",
-            "dua vao tool_results",
-            "su dung cac con so trong tool_results",
-            "xac dinh muc tieu chung",
-        ]
-        return any(marker in normalized for marker in forbidden_markers)
+    def _fallback_for_prompt(self, prompt: dict[str, object]) -> str:
+        intent = str(prompt.get("intent", "general_fitness_qa"))
+        if intent == "general_fitness_qa":
+            return self._render_general_fallback(prompt)
+        if intent == "nutrition_llm_fallback":
+            return self._render_nutrition_fallback(prompt)
+        if intent == "request_tdee_macro":
+            return self._render_macro_fallback(prompt)
+        return self._render_default_fallback(prompt)
 
-    def _contains_meal_planning_meta(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        forbidden_markers = [
-            "luu y quan trong khi tao phan hoi",
-            "vi ban khong the biet",
-            "day la huong dan chi tiet",
-            "hay su dung cac con",
-            "xac dinh muc tieu chung",
-            "chia nho theo",
-            "ke hoach chia nho de xuat",
-            "xay dung ke hoach bua an hop ly",
-            "de ban tham khao",
-        ]
-        if any(marker in normalized for marker in forbidden_markers):
-            return True
-        if text.count("...") >= 2:
-            return True
-        if len(text.splitlines()) > 10:
-            return True
-        return False
-
-    def _contains_workout_planning_meta(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        forbidden_markers = [
-            "nhac den dieu chinh dac biet",
-            "neu co tool_settings",
-            "du lieu dung hon",
-            "hay chi tra tra loi",
-            "theo cac quy tac",
-            "lich tap nay duoc tao tu",
-            "giai thich chi tiet ve ke hoach tap cho tung ngay",
-        ]
-        if any(marker in normalized for marker in forbidden_markers):
-            return True
-        if text.count("...") >= 2:
-            return True
-        if len(text) > 1400:
-            return True
-        if len([line for line in text.splitlines() if line.strip()]) > 10:
-            return True
-        return False
-
-    def _looks_like_meal_guidance(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        meal_markers = [
-            "bua sang",
-            "bua trua",
-            "bua phu",
-            "bua toi",
-        ]
-        marker_hits = sum(1 for marker in meal_markers if marker in normalized)
-        bullet_hits = sum(
-            1 for line in text.splitlines()
-            if line.strip().startswith("-") and "bua" in normalize_text(line)
-        )
-        if marker_hits >= 2 or bullet_hits >= 2:
-            return True
-        return False
-
-    def _looks_like_workout_guidance(self, text: str, prompt: dict[str, object]) -> bool:
-        normalized = normalize_text(text)
+    def _render_macro_fallback(self, prompt: dict[str, object]) -> str:
         tool_results = prompt.get("tool_results", {})
-        workout_plan = tool_results.get("workout_plan", {}) if isinstance(tool_results, dict) else {}
-        non_empty_lines = [line for line in text.splitlines() if line.strip()]
+        macros = tool_results.get("macros", {}) if isinstance(tool_results, dict) else {}
+        if isinstance(macros, dict) and macros:
+            return (
+                f"Muc calories muc tieu cua ban hien la {macros.get('target_calories')} kcal/ngay, "
+                f"voi {macros.get('protein_g')}g protein, {macros.get('fat_g')}g fat va {macros.get('carb_g')}g carb. "
+                "Day la khung co ban de di tiep sang meal plan."
+            )
+        return self._render_default_fallback(prompt)
 
-        if len(non_empty_lines) > 8 or len(text) > 900:
-            return False
+    def _render_nutrition_fallback(self, prompt: dict[str, object]) -> str:
+        items = prompt.get("nutrition_fallback_items", [])
+        if not isinstance(items, list) or not items:
+            return (
+                "Minh chi co the uoc luong so bo cho phan chua co trong nutrition catalog. "
+                "Neu ban muon tinh sat hon, hay nhap ten cu the hon hoac khoi luong theo gram."
+            )
 
-        markers = ["lich tap", "split", "buoi", "day 1", "upper", "lower", "dau goi"]
-        marker_hits = sum(1 for marker in markers if marker in normalized)
+        bullet_lines = [f"- `{str(item).strip()}`: hien chua co du lieu chuan, nen minh chi co the uoc luong o muc low-confidence." for item in items if str(item).strip()]
+        if not bullet_lines:
+            return (
+                "Minh chi co the uoc luong so bo cho phan chua co trong nutrition catalog. "
+                "Neu ban muon tinh sat hon, hay nhap ten cu the hon hoac khoi luong theo gram."
+            )
+        return (
+            "Cac muc duoi day chua co trong nutrition catalog, nen minh chi uoc luong o muc low-confidence:\n"
+            + "\n".join(bullet_lines)
+            + "\nNeu ban muon tinh sat hon, hay nhap ten cu the hon hoac tach thanh nguyen lieu chinh kem khoi luong theo gram."
+        )
 
-        if isinstance(workout_plan, dict) and workout_plan:
-            split = normalize_text(str(workout_plan.get("split", "")))
-            day_count = len(workout_plan.get("days", [])) if isinstance(workout_plan.get("days", []), list) else 0
-            if split and split in normalized:
-                return True
-            if day_count and f"{day_count} buoi" in normalized:
-                return True
+    def _render_general_fallback(self, prompt: dict[str, object]) -> str:
+        message = str(prompt.get("message", "")).strip()
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=2)
+        if not message:
+            if kb_note:
+                return kb_note
+            return "Minh co the tra loi ngan gon va thuc te hon neu ban noi ro hon muc tieu hoac dieu ban muon hoi."
 
-        return marker_hits >= 2
+        normalized_message = normalize_text(message)
+        if any(keyword in normalized_message for keyword in ["giam can", "giam mo", "fat loss"]):
+            reply = (
+                "De giam can ben vung, ban nen giu tham hut calo vua phai, uu tien protein on dinh, "
+                "an cac bua de bam lau va tap deu trong vai tuan de theo doi tien do."
+            )
+        elif any(keyword in normalized_message for keyword in ["ngan hang", "tai khoan", "tai khoan ngan hang"]):
+            reply = (
+                "Ban co the bat dau bang cach chon ngan hang, chuan bi CCCD hoac giay to tuy than, "
+                "roi dang ky tren app hoac ra chi nhanh de xac thuc thong tin theo huong dan cua ngan hang do."
+            )
+        else:
+            reply = (
+                f'Voi cau hoi "{message}", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. '
+                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
+            )
+
+        if kb_note:
+            return f"{reply} {kb_note}"
+        return reply
+
+    def _render_default_fallback(self, prompt: dict[str, object]) -> str:
+        message = str(prompt.get("message", "")).strip()
+        if message:
+            return (
+                f'Voi cau hoi "{message}", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. '
+                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
+            )
+        return "Minh can them mot chut thong tin de tra loi sat hon."
+
+
+    def _summarize_kb_context(self, kb_context: object, max_items: int = 2) -> str:
+        if not isinstance(kb_context, list):
+            return ""
+
+        segments: list[str] = []
+        for item in kb_context:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()
+            content = str(item.get("content", "")).strip()
+            first_sentence = content.split(".")[0].strip()
+            if not first_sentence:
+                continue
+            if title:
+                segments.append(f"{title}: {first_sentence}.")
+            else:
+                segments.append(f"{first_sentence}.")
+            if len(segments) >= max_items:
+                break
+
+        if not segments:
+            return ""
+        return "Goi y lien quan: " + " ".join(segments)
 
     def _contains_generation_noise(self, text: str) -> bool:
         normalized = normalize_text(text)
         if any(marker in normalized for marker in ["channel|", "turn|", "<channel|", "<turn|"]):
             return True
-
         noise_char_count = len(NON_LATIN_NOISE_PATTERN.findall(text))
-        if noise_char_count >= 6:
-            return True
-
-        return False
-
-    def _looks_invalid_general_response(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        invalid_markers = [
-            "turn|",
-            "channel",
-            "assistant",
-            "final output",
-            "final answer",
-            "response:",
-            "tool_results",
-            "tool_settings",
-            "safety case",
-            "quy tac",
-            "hay chi",
-            "khong vi thieu tool",
-            "tra loi theo",
-            "du lieu",
-            "nhiem vu tra loi",
-            "yeu cau hien tai cua user",
-            "profile:",
-            "personalization:",
-            "knowledge context",
-        ]
-        if any(marker in normalized for marker in invalid_markers):
-            return True
-        if self._contains_generation_noise(text):
-            return True
-        if len(text.strip()) < 20:
-            return True
-        return False
-
-    def _looks_invalid_nutrition_fallback_response(self, text: str) -> bool:
-        normalized = normalize_text(text)
-        invalid_markers = [
-            "tool_results",
-            "response_rules",
-            "intent:",
-            "profile:",
-            "history:",
-            "knowledge context",
-            "safety case",
-            "channel|",
-            "turn|",
-        ]
-        if any(marker in normalized for marker in invalid_markers):
-            return True
-        if self._contains_generation_noise(text):
-            return True
-        return len(text.strip()) < 24
+        return noise_char_count >= 6
 
     def _is_control_line(self, line: str) -> bool:
         lowered = line.strip().lower()

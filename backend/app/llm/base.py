@@ -26,67 +26,6 @@ class BaseLLMBackend(ABC):
         joined = ", ".join(human_fields)
         return f"Để hỗ trợ đúng hơn cho yêu cầu `{intent}`, mình cần thêm: {joined}."
 
-    def build_text_prompt(self, prompt: dict[str, object]) -> str:
-        sections = [
-            ("SYSTEM", prompt.get("system_prompt", "")),
-            ("PROFILE", prompt.get("profile_summary", "")),
-            ("PERSONALIZATION", prompt.get("personalization_summary", "")),
-            ("HISTORY", self._format_history(prompt.get("history", []))),
-            ("TOOL_RESULTS", self._format_json(prompt.get("tool_results", {}))),
-            ("KB_CONTEXT", self._format_kb_context(prompt.get("kb_context", []))),
-            ("USER_MESSAGE", prompt.get("message", "")),
-            ("INTENT", prompt.get("intent", "")),
-            ("RESPONSE_RULES", self.build_response_rules(prompt)),
-        ]
-        return "\n\n".join(
-            f"[{title}]\n{content}" for title, content in sections if content not in ("", "[]", "{}")
-        )
-
-    def build_response_rules(self, prompt: dict[str, object]) -> str:
-        intent = str(prompt.get("intent", "general_fitness_qa"))
-        common_style_rule = (
-            "Trả lời bằng tiếng Việt tự nhiên, có dấu, giọng điệu thân thiện như một trợ lý hữu ích."
-            if intent == "general_fitness_qa"
-            else "Trả lời bằng tiếng Việt tự nhiên, có dấu, giọng điệu thân thiện như một fitness coach."
-        )
-        common_rules = [
-            common_style_rule,
-            "Không lặp lại câu hỏi của user.",
-            "Không echo prompt và không xuất code fence.",
-            "Nếu có TOOL_RESULTS thì xem đó là dữ liệu đúng nhất.",
-            "Nếu TOOL_RESULTS có số liệu thì phải dùng đúng các con số đó, không làm tròn và không tự đổi số.",
-            "Không viết các nhãn như Final Answer, Answer hay Response.",
-            "Chỉ viết phần trả lời cuối cùng cho user.",
-        ]
-
-        intent_rules = {
-            "request_tdee_macro": (
-                "Tóm tắt calories mục tiêu và macro trong 1-3 câu, "
-                "nếu rõ thì nên nhắc đến protein, fat, carb."
-            ),
-            "request_meal_guidance": (
-                "Gợi ý trực tiếp khung 3-5 bữa ăn, mỗi bữa có mục tiêu tương đối và món ví dụ ngắn gọn. "
-                "Không nhắc tới TOOL_RESULTS, prompt hay quy tắc nội bộ. "
-                "Ưu tiên format kiểu: Bữa sáng..., Bữa trưa..., Bữa phụ..., Bữa tối..."
-            ),
-            "request_workout_plan": (
-                "Giải thích ngắn gọn lịch tập cho user theo kiểu coach, nêu split, số buổi và 1-2 lưu ý quan trọng. "
-                "Không nhắc tên trường nội bộ hay dữ liệu hệ thống."
-            ),
-            "general_fitness_qa": (
-                "Trả lời trực tiếp câu hỏi hiện tại một cách tự nhiên và hữu ích. "
-                "Không nhắc đến tool, intent, safety case, prompt hay quy tắc nội bộ."
-            ),
-        }
-        extra_rule = intent_rules.get(intent)
-        if extra_rule:
-            common_rules.append(extra_rule)
-        if str(prompt.get("personalization_summary", "")).strip():
-            common_rules.append(
-                "Nếu có PERSONALIZATION thì hãy phản ánh các ưu tiên đó vào câu trả lời một cách tự nhiên."
-            )
-        return "\n".join(f"- {rule}" for rule in common_rules)
-
     def _format_history(self, history: object) -> str:
         if not isinstance(history, list):
             return ""

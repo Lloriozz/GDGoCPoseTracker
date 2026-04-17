@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.core.config import settings
 from app.core.orchestrator import FitnessChatOrchestrator
 from app.core.text_utils import normalize_text
-from app.db.database import init_db
+from app.db.database import drop_schema, init_db
 from app.llm.factory import build_llm_backend
 from app.schemas.chat_request import ChatRequest
 from app.schemas.chat_response import ChatResponse
@@ -521,10 +521,11 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"fine_tune_eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    original_sqlite_path = settings.sqlite_path
+    database_schema = f"fine_tune_eval_{uuid4().hex}"
+    original_database_schema = settings.database_schema
 
     try:
-        settings.sqlite_path = str(temp_dir / "eval.db")
+        settings.database_schema = database_schema
         build_llm_backend.cache_clear()
         init_db()
 
@@ -585,8 +586,9 @@ def run_eval() -> int:
         _safe_print("Recommendation: " + _recommend_next_step(results))
         return 0 if total_passed == len(results) else 1
     finally:
-        settings.sqlite_path = original_sqlite_path
+        settings.database_schema = original_database_schema
         build_llm_backend.cache_clear()
+        drop_schema(database_schema)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 

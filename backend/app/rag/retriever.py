@@ -135,13 +135,15 @@ class KnowledgeRetriever:
         message: str,
         intent: str,
         profile: UserProfile,
+        allowed_category_prefixes: tuple[str, ...] | None = None,
     ) -> list[dict[str, object]]:
         if not settings.rag_enabled or not self._entries:
             return []
 
         message_tokens = self._expand_tokens(self._tokenize(message))
         profile_tokens = self._expand_tokens(self._build_profile_hint_tokens(profile, intent))
-        allowed_category_prefixes = self._allowed_category_prefixes(intent)
+        if allowed_category_prefixes is None:
+            allowed_category_prefixes = self._allowed_category_prefixes(intent)
         if not message_tokens and not profile_tokens:
             return []
 

@@ -1,4 +1,4 @@
-from app.core.text_utils import normalize_text
+from app.core.robust_text_utils import repair_mojibake, robust_normalize_text
 from app.llm.base import BaseLLMBackend
 
 
@@ -9,7 +9,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         profile_data = prompt.get("profile_data", {})
         kb_context = prompt.get("kb_context", [])
         message = str(prompt.get("message", ""))
-        normalized_message = normalize_text(message)
+        normalized_message = robust_normalize_text(message)
         nutrition_fallback_items = prompt.get("nutrition_fallback_items", [])
 
         if intent == "nutrition_llm_fallback" and isinstance(nutrition_fallback_items, list):
@@ -19,11 +19,13 @@ class MockGemmaInferencer(BaseLLMBackend):
             workout_plan = tool_results.get("workout_plan", {})
             if isinstance(workout_plan, dict) and workout_plan:
                 return self._build_workout_reply(workout_plan, profile_data, kb_context)
+            return self._build_wiki_workout_guidance(profile_data, kb_context)
 
         if intent == "request_meal_guidance":
             macros = tool_results.get("macros", {})
             if isinstance(macros, dict) and macros:
                 return self._generate_meal_guidance(macros, profile_data, kb_context)
+            return self._build_wiki_meal_guidance(profile_data, kb_context)
 
         if intent == "request_tdee_macro":
             macros = tool_results.get("macros", {})
@@ -37,8 +39,8 @@ class MockGemmaInferencer(BaseLLMBackend):
         if any(keyword in normalized_message for keyword in ["bao nhieu tien", "chi phi", "het bao nhieu"]):
             return self._build_cost_reply(profile_data)
 
-        if intent == "general_fitness_qa" and isinstance(kb_context, list) and kb_context:
-            return self._answer_from_kb(kb_context)
+        if intent == "general_fitness_qa":
+            return self._build_general_fitness_reply(message, profile_data, kb_context)
 
         return self._build_general_reply(message)
 
@@ -54,7 +56,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         split = workout_plan.get("split", "custom")
         days = workout_plan.get("days", [])
         experience_level = profile_data.get("experience_level")
-        goal_detail = profile_data.get("goal_detail")
+        goal_detail = repair_mojibake(str(profile_data.get("goal_detail", "")).strip())
 
         segments = [f"Mình đã lên khung lịch tập theo split {split} với {len(days)} buổi"]
         if experience_level:
@@ -70,6 +72,84 @@ class MockGemmaInferencer(BaseLLMBackend):
         if knowledge_note:
             reply += f" {knowledge_note}"
         return reply
+
+    def _build_wiki_workout_guidance(
+        self,
+        profile_data: object,
+        kb_context: object,
+    ) -> str:
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        workout_days = int(profile_data.get("workout_days_per_week") or 3)
+        split = self._suggest_split_name(workout_days)
+        display_split = split.replace("_", "/")
+        experience_level = str(profile_data.get("experience_level", "")).strip()
+        goal_detail = repair_mojibake(str(profile_data.get("goal_detail", "")).strip())
+        train_location = str(profile_data.get("train_location", "")).strip()
+        normalized_injuries = {
+            robust_normalize_text(str(item)) for item in profile_data.get("injuries") or []
+        }
+        knee_sensitive = bool({"knee", "goi", "dau goi"} & normalized_injuries)
+        shoulder_sensitive = bool({"shoulder", "vai", "dau vai"} & normalized_injuries)
+
+        opening = [f"Voi {workout_days} buoi moi tuan, minh nghieng ve split {display_split} de de bam va de tang tai."]
+        if experience_level:
+            opening.append(f"Muc do hien tai se hop hon voi trinh do {experience_level}.")
+        if train_location:
+            opening.append(f"Minh uu tien bai tap hop voi boi canh tap o {train_location}.")
+        if goal_detail:
+            opening.append(f"Uu tien rieng can nho la: {goal_detail}.")
+
+        day_lines = [f"- Buoi {index + 1}: {focus}" for index, focus in enumerate(self._build_day_focuses(split, workout_days))]
+
+        notes: list[str] = []
+        if knee_sensitive:
+            notes.append(
+                "Neu dau goi nhay cam, uu tien ROM kiem soat, hip hinge, box squat hoac leg press nhe, "
+                "va tranh nhoi volume squat/lunge qua cao."
+            )
+        if shoulder_sensitive:
+            notes.append(
+                "Neu vai nhay cam, uu tien may on dinh, giam overhead volume, va tang bai keo/face pull de giu vai on dinh."
+            )
+        knowledge_note = self._build_workout_kb_note(kb_context)
+        if knowledge_note:
+            notes.append(knowledge_note)
+
+        sections = [" ".join(opening), "\n".join(day_lines)]
+        if notes:
+            sections.append(" ".join(notes))
+        return "\n".join(section for section in sections if section)
+
+    def _build_wiki_meal_guidance(
+        self,
+        profile_data: object,
+        kb_context: object,
+    ) -> str:
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        goal = str(profile_data.get("goal", "")).strip()
+        if goal == "muscle_gain":
+            opening = "Minh goi y khung an uu tien phuc hoi va giu protein on dinh de de bam muc tieu tang co."
+        elif goal == "fat_loss":
+            opening = "Minh goi y khung an uu tien no lau, de ap dung, va giu protein on dinh de ho tro giam mo."
+        else:
+            opening = "Minh goi y mot khung an thuc te, de xoay tua hang ngay va de dieu chinh theo muc tieu cua ban."
+
+        meal_examples = self._build_meal_examples(profile_data, kb_context)
+        meal_names = ["Bua sang", "Bua trua", "Bua phu", "Bua toi"]
+        meal_lines = [
+            f"- {meal_name}: {example}"
+            for meal_name, example in zip(meal_names, meal_examples, strict=False)
+        ]
+
+        notes = [note for note in [self._build_preference_note(profile_data), self._build_kb_note(kb_context)] if note]
+        sections = [opening, "\n".join(meal_lines)]
+        if notes:
+            sections.append(" ".join(notes))
+        return "\n".join(section for section in sections if section)
 
     def _generate_meal_guidance(
         self,
@@ -191,7 +271,9 @@ class MockGemmaInferencer(BaseLLMBackend):
         if allergies:
             notes.append(f"Cần tránh các món liên quan đến: {', '.join(str(item) for item in allergies)}.")
         if preferred_foods:
-            notes.append(f"Nếu hợp macro, có thể ưu tiên xoay tua các món bạn thích như: {', '.join(str(item) for item in preferred_foods)}.")
+            notes.append(
+                f"Nếu hợp khẩu vị và mục tiêu, có thể ưu tiên xoay tua các món bạn thích như: {', '.join(str(item) for item in preferred_foods)}."
+            )
         if disliked_foods:
             notes.append(f"Nên hạn chế các món bạn không thích như: {', '.join(str(item) for item in disliked_foods)}.")
         if budget_level == "low":
@@ -211,14 +293,14 @@ class MockGemmaInferencer(BaseLLMBackend):
         kb_context: object,
     ) -> list[str]:
         normalized_preferences = {
-            normalize_text(str(item)) for item in profile_data.get("diet_preferences") or []
+            robust_normalize_text(str(item)) for item in profile_data.get("diet_preferences") or []
         }
         normalized_allergies = {
-            normalize_text(str(item)) for item in profile_data.get("allergies") or []
+            robust_normalize_text(str(item)) for item in profile_data.get("allergies") or []
         }
         preferred_foods = [str(item) for item in profile_data.get("preferred_foods") or []]
         disliked_foods = {
-            normalize_text(str(item)) for item in profile_data.get("disliked_foods") or []
+            robust_normalize_text(str(item)) for item in profile_data.get("disliked_foods") or []
         }
 
         if {"vegetarian", "an chay", "vegan"} & normalized_preferences:
@@ -267,7 +349,7 @@ class MockGemmaInferencer(BaseLLMBackend):
 
         preferred_examples = []
         for item in preferred_foods:
-            normalized = normalize_text(item)
+            normalized = robust_normalize_text(item)
             if "pho" in normalized:
                 preferred_examples.append("phở bò ít mỡ + trái cây")
             elif "trung" in normalized:
@@ -283,7 +365,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         seen: set[str] = set()
         selected: list[str] = []
         for candidate in ordered_candidates:
-            normalized_candidate = normalize_text(candidate)
+            normalized_candidate = robust_normalize_text(candidate)
             if not candidate or normalized_candidate in seen:
                 continue
             if any(disliked in normalized_candidate for disliked in disliked_foods if disliked):
@@ -296,6 +378,38 @@ class MockGemmaInferencer(BaseLLMBackend):
         while len(selected) < 4:
             selected.append(defaults[len(selected)])
         return selected
+
+    def _suggest_split_name(self, workout_days: int) -> str:
+        if workout_days <= 3:
+            return "full_body"
+        if workout_days == 4:
+            return "upper_lower"
+        return "push_pull_legs"
+
+    def _build_day_focuses(self, split: str, workout_days: int) -> list[str]:
+        if split == "full_body":
+            templates = [
+                "Full body A, ưu tiên động tác cơ bản và kỹ thuật ổn.",
+                "Full body B, nhấn vào kéo-đẩy cân bằng và thân giữa.",
+                "Full body C, lặp lại mẫu chuyển động với biến thể nhẹ hơn.",
+            ]
+            return templates[:workout_days]
+        if split == "upper_lower":
+            templates = [
+                "Upper 1, ưu tiên press + row + vai + tay sau tay trước.",
+                "Lower 1, ưu tiên hip hinge, squat biến thể và core.",
+                "Upper 2, lặp lại thân trên với góc bài tập khác một chút.",
+                "Lower 2, nhấn vào chân sau, mông và bài một chân có kiểm soát.",
+            ]
+            return templates[:workout_days]
+        templates = [
+            "Push, ưu tiên ngực vai tay sau.",
+            "Pull, ưu tiên lưng xô, rear delt và tay trước.",
+            "Legs, ưu tiên chân trước, chân sau, mông và core.",
+            "Upper, lặp lại thân trên theo mức vừa phải.",
+            "Lower, lặp lại thân dưới theo mức vừa phải.",
+        ]
+        return templates[:workout_days]
 
     def _build_cost_reply(self, profile_data: object) -> str:
         if not isinstance(profile_data, dict):
@@ -327,13 +441,12 @@ class MockGemmaInferencer(BaseLLMBackend):
         return reply
 
     def _build_kb_note(self, kb_context: object) -> str:
-        if not isinstance(kb_context, list) or not kb_context:
+        ranked_items = self._rank_kb_context_items(kb_context)
+        if not ranked_items:
             return ""
 
         notes: list[str] = []
-        for item in kb_context[:2]:
-            if not isinstance(item, dict):
-                continue
+        for item in ranked_items[:2]:
             title = str(item.get("title", "")).strip()
             content = str(item.get("content", "")).strip()
             first_sentence = content.split(".")[0].strip()
@@ -344,12 +457,11 @@ class MockGemmaInferencer(BaseLLMBackend):
         return "Bạn có thể tham khảo thêm: " + " ".join(notes)
 
     def _build_workout_kb_note(self, kb_context: object) -> str:
-        if not isinstance(kb_context, list) or not kb_context:
+        ranked_items = self._rank_kb_context_items(kb_context)
+        if not ranked_items:
             return ""
 
-        for item in kb_context:
-            if not isinstance(item, dict):
-                continue
+        for item in ranked_items:
             category = str(item.get("category", ""))
             if not category.startswith(("workout", "recovery")):
                 continue
@@ -360,7 +472,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         return ""
 
     def _answer_from_kb(self, kb_context: list[object]) -> str:
-        usable_entries = [item for item in kb_context if isinstance(item, dict)]
+        usable_entries = self._rank_kb_context_items(kb_context)
         if not usable_entries:
             return self._build_general_reply("")
 
@@ -376,24 +488,182 @@ class MockGemmaInferencer(BaseLLMBackend):
                     segments.append(f"- {first_sentence}.")
 
         if segments:
-            return "Mình gợi ý ngắn gọn như sau:\n" + "\n".join(segments)
+            return "Minh goi y ngan gon nhu sau:\n" + "\n".join(segments)
 
         return (
             self._build_general_reply("")
         )
 
+    def _rank_kb_context_items(self, kb_context: object) -> list[dict[str, object]]:
+        if not isinstance(kb_context, list):
+            return []
+
+        usable_entries = [item for item in kb_context if isinstance(item, dict)]
+        if not usable_entries:
+            return []
+
+        def priority(item: dict[str, object]) -> tuple[int, float]:
+            source = str(item.get("source", "kb"))
+            page_type = str(item.get("page_type", ""))
+            score = float(item.get("score", 0))
+            if source == "wiki":
+                if page_type == "concept":
+                    return (6, score)
+                if page_type in {"comparison", "entity"}:
+                    return (5, score)
+                if page_type == "index":
+                    return (2, score)
+                if page_type == "source-summary":
+                    return (1, score)
+            return (4, score)
+
+        usable_entries.sort(key=priority, reverse=True)
+        return usable_entries
+
+    def _build_general_fitness_reply(
+        self,
+        message: str,
+        profile_data: object,
+        kb_context: object,
+    ) -> str:
+        normalized_message = robust_normalize_text(message)
+
+        if any(
+            marker in normalized_message
+            for marker in ["nen an gi", "an gi", "mon viet", "protein", "tiet kiem", "lich an", "thuc don", "goi y mon"]
+        ):
+            return self._build_general_meal_reply(profile_data, kb_context, normalized_message)
+
+        if any(
+            marker in normalized_message
+            for marker in ["lich tap", "split", "tap chan", "dau goi", "co nen tap gym", "tap gym", "bai tap"]
+        ):
+            return self._build_general_workout_reply(profile_data, kb_context, normalized_message)
+
+        if any(marker in normalized_message for marker in ["giam can", "giam mo", "fat loss"]):
+            kb_note = self._build_kb_note(kb_context)
+            reply = (
+                "De giam can ben vung, ban nen giu tham hut calo vua phai, uu tien protein on dinh, "
+                "an cac bua de bam lau va tap deu trong vai tuan de theo doi tien do."
+            )
+            return f"{reply} {kb_note}".strip() if kb_note else reply
+
+        if any(marker in normalized_message for marker in ["dien giai", "bu nuoc", "hydration", "sau tap"]):
+            kb_note = self._build_kb_note(kb_context)
+            reply = (
+                "Dien giai quan trong hon khi ban do mo hoi nhieu, tap lau hoac tap trong moi truong nong. "
+                "Neu buoi tap nhe va ban an uong binh thuong, uu tien bu nuoc va an lai mot bua hop ly la du."
+            )
+            return f"{reply} {kb_note}".strip() if kb_note else reply
+
+        if isinstance(kb_context, list) and kb_context:
+            return self._answer_from_kb(kb_context)
+
+        return self._build_general_reply(message)
+
     def _build_general_reply(self, message: str) -> str:
-        cleaned_message = " ".join(message.strip().split())
+        cleaned_message = " ".join(repair_mojibake(message).strip().split())
+        normalized_message = robust_normalize_text(cleaned_message)
+
+        if any(marker in normalized_message for marker in ["tai khoan ngan hang", "mo tai khoan", "ngan hang"]):
+            return (
+                "Ban co the bat dau bang cach chon ngan hang, chuan bi CCCD hoac giay to tuy than, "
+                "roi dang ky tren app hoac ra chi nhanh de xac thuc thong tin theo huong dan cua ngan hang do."
+            )
+
         if cleaned_message:
             return (
-                f"Mình đã nhận được câu hỏi \"{cleaned_message}\". Ở bản mock này, mình giữ câu trả lời ở mức trợ lý tổng quát "
-                "để test luồng hội thoại và không chặn các câu ngoài fitness. Khi dùng Gemma thật, model sẽ tự suy nghĩ và "
-                "trả lời tự nhiên hơn cho những câu hỏi kiểu này."
+                f"Voi cau hoi \"{cleaned_message}\", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. "
+                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
             )
         return (
-            "Mình đã nhận được ngữ cảnh hiện tại. Ở bản mock này, mình giữ câu trả lời ở mức trợ lý tổng quát để test "
-            "luồng hội thoại; khi nối Gemma thật, model sẽ trả lời tự nhiên hơn."
+            "Minh co the giup ban tra loi ngan gon va thuc te hon neu ban noi ro hon dieu ban muon hoi."
         )
+
+    def _build_general_meal_reply(
+        self,
+        profile_data: object,
+        kb_context: object,
+        normalized_message: str,
+    ) -> str:
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        normalized_preferences = {
+            robust_normalize_text(str(item)) for item in profile_data.get("diet_preferences") or []
+        }
+        normalized_allergies = {
+            robust_normalize_text(str(item)) for item in profile_data.get("allergies") or []
+        }
+
+        if any(marker in normalized_message for marker in ["sau tap", "tap xong", "moi tap xong"]):
+            base = (
+                "Sau tap, ban nen uu tien mot bua co protein ro rang kem carb de hoi phuc tot hon, "
+                "vi du com + uc ga, bun + trung, hoac sua chua + chuoi neu can gon nhe."
+            )
+        elif any(marker in normalized_message for marker in ["giam can", "giam mo", "fat loss"]):
+            base = (
+                "Neu dang giam can, ban nen uu tien bua co protein ro rang, rau de no lau, "
+                "va giu phan carb vua du, vi du uc ga + rau + com it hon, trung + salad + khoai, hoac dau hu + rau + com."
+            )
+        elif any(marker in normalized_message for marker in ["tang co", "muscle gain"]):
+            base = (
+                "Neu uu tien tang co, hay giu moi bua co protein ro rang kem carb de hoi phuc va tap tot hon, "
+                "vi du com + uc ga, bun + bo nac, pho ga it mo, hoac sua chua + chuoi + yen mach."
+            )
+        elif {"vegetarian", "an chay", "vegan"} & normalized_preferences:
+            base = (
+                "Neu ban an chay, hay uu tien dau hu, edamame, sua dau nanh, sua chua thuc vat va cac bua com hoac bun co them rau "
+                "de giu du protein ma van de bam hang ngay."
+            )
+        elif "tiet kiem" in normalized_message and "protein" in normalized_message:
+            base = (
+                "Neu muon tiet kiem ma van du protein, ban co the uu tien trung, dau hu, uc ga, ca hop, "
+                "sua chua va com hoac khoai de de xoay tua hang ngay."
+            )
+        else:
+            base = (
+                "Ban co the di theo huong moi bua co protein ro rang, them rau, va chon carb vua du theo muc tieu. "
+                "Cac mon de bam nhat thuong la com + thit nac, bun + trung, pho ga it mo, hoac dau hu + com + rau."
+            )
+
+        if {"milk", "sua", "dairy", "lactose"} & normalized_allergies:
+            base += " Neu khong hop sua, co the doi sang sua dau nanh khong duong hoac protein thuc vat."
+
+        kb_note = self._build_kb_note(kb_context)
+        return f"{base} {kb_note}".strip() if kb_note else base
+
+    def _build_general_workout_reply(
+        self,
+        profile_data: object,
+        kb_context: object,
+        normalized_message: str,
+    ) -> str:
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        if "dau goi" in normalized_message:
+            base = (
+                "Neu dau goi nhay cam, uu tien cac bai kiem soat ROM, tang tai tu tu, "
+                "va tranh nhoi squat hoac lunge qua cao khi dang bi kich ung."
+            )
+        elif "co nen tap gym" in normalized_message or "tap gym khong" in normalized_message:
+            base = (
+                "Neu suc khoe hien tai on va ban muon cai thien the luc, tap gym la mot lua chon rat on "
+                "mien la ban bat dau voi muc vua phai, hoc ky thuat tu tu, va duy tri deu."
+            )
+        elif profile_data.get("workout_days_per_week") == 4 or "4 buoi" in normalized_message:
+            base = (
+                "Neu ban tap 4 buoi moi tuan, split upper/lower thuong la mot diem bat dau rat de bam "
+                "vi vua de lap lai, vua de theo doi tien do."
+            )
+        else:
+            base = (
+                "Ban nen bat dau voi mot lich de bam, uu tien ky thuat on va tang tai tu tu thay vi doi hoi lich qua phuc tap ngay tu dau."
+            )
+
+        kb_note = self._build_workout_kb_note(kb_context)
+        return f"{base} {kb_note}".strip() if kb_note else base
 
     def _build_nutrition_fallback_reply(self, items: list[object]) -> str:
         lines = [
@@ -401,7 +671,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         ]
         for item in items:
             raw_item = str(item).strip()
-            normalized_item = normalize_text(raw_item)
+            normalized_item = robust_normalize_text(raw_item)
             if "rong bien" in normalized_item:
                 lines.append(
                     f"- `{raw_item}`: neu la rong bien an kem hoac rong bien kho thong thuong thi calories thuong khong cao, "
