@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # Install libraries
+    "channels",
+    "daphne",
     "rest_framework",
     "corsheaders",
     "django_extensions",
@@ -83,6 +85,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "exercise_correction.wsgi.application"
+ASGI_APPLICATION = "exercise_correction.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
 
 
 # Database

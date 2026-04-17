@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ChatBubble } from '../components/chat/ChatBubble';
@@ -50,6 +50,9 @@ export default function ChatbotScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const sessionId = useMemo(() => `mobile-session-${Date.now()}`, []);
   const userId = useMemo(() => 'mobile-user-001', []);
+  
+  // Lấy insets của điện thoại (Tai thỏ, Dynamic Island, viền dưới) để tính toán chuẩn xác
+  const insets = useSafeAreaInsets();
 
   const sendMessage = async (rawText?: string) => {
     const nextText = (rawText ?? input).trim();
@@ -97,10 +100,13 @@ export default function ChatbotScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    // Cách giải quyết 1: Chỉ lấy insets top, bỏ bottom đi vì KeyboardAvoidingView sẽ lo việc đẩy nội dung lên
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.container}
+        // Cách giải quyết 2: Thêm offset để iOS không đẩy quá tay
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0} 
       >
         <LinearGradient
           colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
@@ -120,7 +126,8 @@ export default function ChatbotScreen() {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
+          // Cách giải quyết 3: Đảm bảo khoảng trống dưới cùng cuộn đủ rộng để không bị che
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(20, insets.bottom + 10) }]}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
@@ -149,7 +156,11 @@ export default function ChatbotScreen() {
           ) : null}
         </ScrollView>
 
+        {/* Khung chat composer giờ sẽ được đẩy lên một cách an toàn */}
         <ChatComposer value={input} onChangeText={setInput} onSend={() => sendMessage()} loading={loading} />
+        
+        {/* Cách giải quyết 4: Đệm thêm không gian cho phần bottom (thanh home bar của iPhone) nếu chưa mở bàn phím */}
+        {Platform.OS === 'ios' && <View style={{ height: insets.bottom }} />}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -158,36 +169,37 @@ export default function ChatbotScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: '#0F0F0F', // Chỉnh lại background thành màu cố định thay vì dựa vào theme để tránh viền sáng
   },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
   },
   header: {
-    height: 68,
+    height: 60, // Giảm bớt chiều cao header một chút để có thêm không gian cho màn nhỏ
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    zIndex: 10, // Đảm bảo header đè lên gradient
   },
   headerIcon: {
     width: 36,
+    height: 36, // Xác định rõ kích thước vùng bấm
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
     color: theme.colors.text,
-    fontSize: 20,
+    fontSize: 18, // Giảm một xíu để nhìn thanh thoát hơn
     fontWeight: '700',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 14,
-    paddingTop: 18,
-    paddingBottom: 20,
+    paddingHorizontal: 16, // Căn lề rộng ra một chút
+    paddingTop: 10,
+    flexGrow: 1, // Quan trọng: Đảm bảo nội dung luôn push xuống nếu ít tin nhắn
   },
   greeting: {
     fontSize: 20,
@@ -197,27 +209,29 @@ const styles = StyleSheet.create({
   hero: {
     marginTop: 8,
     color: theme.colors.text,
-    fontSize: 28,
+    fontSize: 26, // Chỉnh lại size chữ một xíu cho màn nhỏ
     fontWeight: '800',
-    lineHeight: 38,
-    maxWidth: 290,
+    lineHeight: 34,
+    maxWidth: '90%', // Đừng fix cứng kích thước, dùng % cho linh hoạt
   },
   quickActionGroup: {
-    marginTop: 22,
-  },
-  messageList: {
     marginTop: 24,
   },
+  messageList: {
+    marginTop: 16,
+    paddingBottom: 10,
+  },
   resetButton: {
-    alignSelf: 'flex-start',
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: theme.radius.round,
-    backgroundColor: theme.colors.primarySoft,
+    alignSelf: 'center', // Đưa ra giữa nhìn sẽ cân đối hơn
+    marginTop: 20,
+    marginBottom: 10, // Cho thêm margin bottom
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 94, 14, 0.15)', // Sửa lại màu nền nút reset xíu cho hợp với gradient
   },
   resetText: {
-    color: theme.colors.primary,
+    color: '#FF5E0E', // Thay bằng màu chính xác
     fontSize: 14,
     fontWeight: '700',
   },

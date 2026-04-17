@@ -28,12 +28,9 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    database_schema = f"eval_{uuid4().hex}"
-    original_database_schema = settings.database_schema
     original_llm_backend = settings.llm_backend
 
     try:
-        settings.database_schema = database_schema
         settings.llm_backend = "mock-gemma"
         build_llm_backend.cache_clear()
         init_db()
@@ -204,7 +201,6 @@ def run_eval() -> int:
         _safe_print(f"\nSummary: {passed}/{len(cases)} checks passed")
         return 0 if passed == len(cases) else 1
     finally:
-        settings.database_schema = original_database_schema
         settings.llm_backend = original_llm_backend
         build_llm_backend.cache_clear()
         drop_schema(database_schema)

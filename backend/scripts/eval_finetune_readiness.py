@@ -521,11 +521,8 @@ def run_eval() -> int:
     temp_root.mkdir(parents=True, exist_ok=True)
     temp_dir = temp_root / f"fine_tune_eval_{uuid4().hex}"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    database_schema = f"fine_tune_eval_{uuid4().hex}"
-    original_database_schema = settings.database_schema
 
     try:
-        settings.database_schema = database_schema
         build_llm_backend.cache_clear()
         init_db()
 
@@ -586,10 +583,8 @@ def run_eval() -> int:
         _safe_print("Recommendation: " + _recommend_next_step(results))
         return 0 if total_passed == len(results) else 1
     finally:
-        settings.database_schema = original_database_schema
         build_llm_backend.cache_clear()
-        drop_schema(database_schema)
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(temp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":

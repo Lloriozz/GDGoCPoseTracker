@@ -21,7 +21,6 @@ class ChatQualityTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls._original_database_schema = settings.database_schema
         cls._original_llm_backend = settings.llm_backend
         cls._original_rag_enabled = settings.rag_enabled
         cls._original_wiki_enabled = settings.wiki_enabled
@@ -30,7 +29,6 @@ class ChatQualityTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        settings.database_schema = cls._original_database_schema
         settings.llm_backend = cls._original_llm_backend
         settings.rag_enabled = cls._original_rag_enabled
         settings.wiki_enabled = cls._original_wiki_enabled
@@ -40,8 +38,6 @@ class ChatQualityTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = self._temp_root / f"case_{uuid4().hex}"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
-        self.database_schema = f"test_{uuid4().hex}"
-        settings.database_schema = self.database_schema
         settings.llm_backend = "mock-gemma"
         settings.rag_enabled = True
         settings.wiki_enabled = True

@@ -155,7 +155,7 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 80,
+    height: 70,
     paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     paddingTop: 8,
     borderTopWidth: 0,
@@ -172,7 +172,9 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 11, fontWeight: '600' },
   centerWrapper: {
-    top: -20,
+    // Lift the button so its vertical center sits exactly on the
+    // tab bar's top border (button is 68 tall → shift up half of that).
+    top: -34,
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
@@ -193,6 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
+    // Match the tab bar background so the button blends into it.
     borderColor: '#0F0F0F',
   },
   modalOverlay: {
