@@ -29,7 +29,7 @@ class Settings:
     gemma_max_new_tokens: int = int(os.getenv("GEMMA_MAX_NEW_TOKENS", "512"))
     gemma_temperature: float = float(os.getenv("GEMMA_TEMPERATURE", "0.5"))
     gemma_top_p: float = float(os.getenv("GEMMA_TOP_P", "0.95"))
-    gemma_do_sample: bool = _env_bool("GEMMA_DO_SAMPLE", False)
+    gemma_do_sample: bool = _env_bool("GEMMA_DO_SAMPLE", True)
     gemma_trust_remote_code: bool = _env_bool("GEMMA_TRUST_REMOTE_CODE", False)
     gemma_cpu_offload: bool = _env_bool("GEMMA_CPU_OFFLOAD", False)
     gemma_offload_buffers: bool = _env_bool("GEMMA_OFFLOAD_BUFFERS", False)

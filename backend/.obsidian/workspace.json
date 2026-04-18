@@ -1,0 +1,212 @@
+{
+  "main": {
+    "id": "f9898486cc740828",
+    "type": "split",
+    "children": [
+      {
+        "id": "733b689232f7670d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "608d3fc702bde22d",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "knowledge/INGEST_WORKFLOW.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "INGEST_WORKFLOW"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "7b7c10dc664026d9",
+    "type": "split",
+    "children": [
+      {
+        "id": "52558170276bf26a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cc93e9b209bc59a0",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "d7d72e4757bbc539",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "2105008fc86ddaba",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8076e71a3a1d3ec0",
+    "type": "split",
+    "children": [
+      {
+        "id": "2b4488e7183907bc",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "361883ceec94e989",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "bb251945de41c0b3",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "e369d5f1c96107b8",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "a968034a1124a7fa",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "4665cd12a14239f6",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "608d3fc702bde22d",
+  "lastOpenFiles": [
+    "knowledge/wiki/workout/calisthenics-basics.md",
+    "knowledge/wiki/recovery/source-summary-olaben-gian-co-sau-khi-tap.md",
+    "knowledge/wiki/recovery/source-summary-kingsport-gian-co-sau-khi-tap.md",
+    "knowledge/wiki/recovery/source-summary-vnexpress-6-bai-gian-co-sau-khi-tap-the-thao.md",
+    "knowledge/wiki/recovery/source-summary-ifitness-15-dong-tac-gian-co-tinh.md",
+    "knowledge/wiki/recovery/static-stretching-timing.md",
+    "knowledge/wiki/recovery/post-workout-stretching-basics.md",
+    "knowledge/raw/6 bài giãn cơ sau khi tập thể thao.md",
+    "knowledge/raw/Giãn cơ sau khi tập giúp xoa dịu cơn đau cơ nhanh chóng.md",
+    "knowledge/raw/15 Động Tác Giãn Cơ Tĩnh Tăng Cường Thói Quen Tập Luyện Hàng Ngày Của Bạn.md",
+    "knowledge/raw/Giãn Cơ Sau Khi Tập_ Lợi Ích Và 6 Bài Tập Hiệu Quả Không Nên Bỏ Qua.md",
+    "knowledge/wiki/workout/source-summary-vinmec-hoat-dong-the-chat-thuong-xuyen.md",
+    "knowledge/wiki/workout/source-summary-long-chau-tap-30-phut-moi-ngay.md",
+    "knowledge/wiki/workout/source-summary-vinmec-7-loi-ich-tap-the-duc.md",
+    "knowledge/wiki/workout/source-summary-suckhoedoisong-10-loi-ich-tap-the-duc.md",
+    "knowledge/wiki/workout/source-summary-pharmacity-loi-ich-tap-the-duc-thuong-xuyen.md",
+    "knowledge/wiki/workout/regular-physical-activity-benefits.md",
+    "knowledge/raw/Tập thể dục_ 7 lợi ích của hoạt động thể chất thường xuyên.md",
+    "knowledge/raw/10 lợi ích của việc tập thể dục thường xuyên sẽ khiến bạn bất ngờ!.md",
+    "knowledge/raw/7 lợi ích sức khỏe của việc tập thể dục.md",
+    "knowledge/raw/10 lợi ích tuyệt vời của tập thể dục đều đặn 2021.md",
+    "knowledge/raw/Những lợi ích khi bạn tập thể dục 30 phút mỗi ngày.md",
+    "knowledge/wiki/workout/source-summary-long-chau-bai-tap-gym-cho-nu-moi-bat-dau.md",
+    "knowledge/wiki/workout/source-summary-vinmec-gym-va-the-thao-nguoi-moi.md",
+    "knowledge/wiki/workout/source-summary-decathlon-lich-tap-gym-nguoi-moi.md",
+    "knowledge/wiki/workout/source-summary-ifitness-13-luu-y-khi-tap-gym.md"
+  ]
+}
