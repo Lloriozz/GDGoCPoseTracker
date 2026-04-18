@@ -1,7 +1,7 @@
 import json
 from hashlib import sha256
 
-from app.db.database import get_connection
+from app.db.database import get_connection, normalize_user_id
 from app.schemas.user_profile import UserProfile, UserProfilePatch
 
 
@@ -16,6 +16,7 @@ class ProfileStore:
         )
 
     def get(self, user_id: str) -> UserProfile:
+        user_id = normalize_user_id(user_id)
         with get_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -54,6 +55,7 @@ class ProfileStore:
         return UserProfile(**payload)
 
     def upsert_from_patch(self, user_id: str, patch: UserProfilePatch | None) -> UserProfile:
+        user_id = normalize_user_id(user_id)
         current = self.get(user_id)
         if patch is None:
             return current

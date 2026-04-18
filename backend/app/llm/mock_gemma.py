@@ -5,29 +5,38 @@ from app.llm.base import BaseLLMBackend
 class MockGemmaInferencer(BaseLLMBackend):
     def generate(self, prompt: dict[str, object]) -> str:
         intent = str(prompt.get("intent", "general_fitness_qa"))
+        domain_scope = str(prompt.get("domain_scope", "fitness")).strip()
+        llm_route = prompt.get("llm_route", {})
+        route_mode = self._resolve_route_mode(
+            llm_route=llm_route,
+            intent=intent,
+            domain_scope=domain_scope,
+        )
         tool_results = prompt.get("tool_results", {})
         profile_data = prompt.get("profile_data", {})
         kb_context = prompt.get("kb_context", [])
         message = str(prompt.get("message", ""))
-        normalized_message = robust_normalize_text(message)
         nutrition_fallback_items = prompt.get("nutrition_fallback_items", [])
 
-        if intent == "nutrition_llm_fallback" and isinstance(nutrition_fallback_items, list):
+        if route_mode == "nutrition_fallback" and isinstance(nutrition_fallback_items, list):
             return self._build_nutrition_fallback_reply(nutrition_fallback_items)
 
-        if intent == "request_workout_plan":
+        if route_mode == "workout_guidance":
             workout_plan = tool_results.get("workout_plan", {})
             if isinstance(workout_plan, dict) and workout_plan:
                 return self._build_workout_reply(workout_plan, profile_data, kb_context)
             return self._build_wiki_workout_guidance(profile_data, kb_context)
 
-        if intent == "request_meal_guidance":
+        if route_mode == "meal_guidance":
+            meal_plan = tool_results.get("meal_plan", {})
+            if isinstance(meal_plan, dict) and meal_plan.get("meals"):
+                return self._build_meal_plan_reply(meal_plan, profile_data, kb_context)
             macros = tool_results.get("macros", {})
             if isinstance(macros, dict) and macros:
                 return self._generate_meal_guidance(macros, profile_data, kb_context)
             return self._build_wiki_meal_guidance(profile_data, kb_context)
 
-        if intent == "request_tdee_macro":
+        if route_mode == "macro_summary":
             macros = tool_results.get("macros", {})
             if isinstance(macros, dict) and macros:
                 return (
@@ -36,13 +45,40 @@ class MockGemmaInferencer(BaseLLMBackend):
                     "Đây là khung rất tốt để đi tiếp sang meal plan."
                 )
 
-        if any(keyword in normalized_message for keyword in ["bao nhieu tien", "chi phi", "het bao nhieu"]):
-            return self._build_cost_reply(profile_data)
+        if route_mode == "general_out_of_domain":
+            return self._build_general_reply(message)
 
         if intent == "general_fitness_qa":
-            return self._build_general_fitness_reply(message, profile_data, kb_context)
+            return self._build_general_fitness_reply(
+                message,
+                profile_data,
+                kb_context,
+                response_mode=route_mode,
+            )
 
         return self._build_general_reply(message)
+
+    def _resolve_route_mode(
+        self,
+        *,
+        llm_route: object,
+        intent: str,
+        domain_scope: str,
+    ) -> str:
+        if isinstance(llm_route, dict):
+            mode = str(llm_route.get("mode", "")).strip()
+            if mode:
+                return mode
+
+        defaults = {
+            "nutrition_llm_fallback": "nutrition_fallback",
+            "request_tdee_macro": "macro_summary",
+            "request_meal_guidance": "meal_guidance",
+            "request_workout_plan": "workout_guidance",
+        }
+        if intent == "general_fitness_qa" and domain_scope == "out_of_domain":
+            return "general_out_of_domain"
+        return defaults.get(intent, "general_default")
 
     def _build_workout_reply(
         self,
@@ -150,6 +186,49 @@ class MockGemmaInferencer(BaseLLMBackend):
         if notes:
             sections.append(" ".join(notes))
         return "\n".join(section for section in sections if section)
+
+    def _build_meal_plan_reply(
+        self,
+        meal_plan: dict[str, object],
+        profile_data: object,
+        kb_context: object,
+    ) -> str:
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        target_calories = int(meal_plan.get("target_calories", 0) or 0)
+        protein_g = int(meal_plan.get("protein_g", 0) or 0)
+        fat_g = int(meal_plan.get("fat_g", 0) or 0)
+        carb_g = int(meal_plan.get("carb_g", 0) or 0)
+        meals = meal_plan.get("meals", [])
+
+        meal_lines: list[str] = []
+        if isinstance(meals, list):
+            for meal in meals:
+                if not isinstance(meal, dict):
+                    continue
+                meal_lines.append(
+                    (
+                        f"- {meal.get('name', 'Bua')}: ~{meal.get('calories', 0)} kcal, "
+                        f"{meal.get('protein_g', 0)}g protein, {meal.get('carb_g', 0)}g carb, "
+                        f"{meal.get('fat_g', 0)}g fat. Goi y: {meal.get('example', '')}"
+                    )
+                )
+
+        summary = (
+            f"Khung an goi y cho muc {target_calories} kcal/ngay "
+            f"({protein_g}g protein, {fat_g}g fat, {carb_g}g carb):"
+        )
+        preference_note = self._build_preference_note(profile_data)
+        knowledge_note = self._build_kb_note(kb_context)
+        notes = [note for note in [preference_note, knowledge_note] if note]
+
+        parts = [summary]
+        if meal_lines:
+            parts.append("\n".join(meal_lines))
+        if notes:
+            parts.append(" ".join(notes))
+        return "\n".join(part for part in parts if part)
 
     def _generate_meal_guidance(
         self,
@@ -525,56 +604,53 @@ class MockGemmaInferencer(BaseLLMBackend):
         message: str,
         profile_data: object,
         kb_context: object,
+        response_mode: str,
     ) -> str:
         normalized_message = robust_normalize_text(message)
 
-        if any(
-            marker in normalized_message
-            for marker in ["nen an gi", "an gi", "mon viet", "protein", "tiet kiem", "lich an", "thuc don", "goi y mon"]
-        ):
+        if response_mode == "general_cost_coaching":
+            return self._build_cost_reply(profile_data)
+
+        if response_mode == "general_meal_coaching":
             return self._build_general_meal_reply(profile_data, kb_context, normalized_message)
 
-        if any(
-            marker in normalized_message
-            for marker in ["lich tap", "split", "tap chan", "dau goi", "co nen tap gym", "tap gym", "bai tap"]
-        ):
+        if response_mode == "general_workout_coaching":
             return self._build_general_workout_reply(profile_data, kb_context, normalized_message)
 
-        if any(marker in normalized_message for marker in ["giam can", "giam mo", "fat loss"]):
-            kb_note = self._build_kb_note(kb_context)
-            reply = (
-                "De giam can ben vung, ban nen giu tham hut calo vua phai, uu tien protein on dinh, "
-                "an cac bua de bam lau va tap deu trong vai tuan de theo doi tien do."
-            )
-            return f"{reply} {kb_note}".strip() if kb_note else reply
+        if response_mode == "general_goal_coaching":
+            return self._build_general_goal_reply(kb_context)
 
-        if any(marker in normalized_message for marker in ["dien giai", "bu nuoc", "hydration", "sau tap"]):
-            kb_note = self._build_kb_note(kb_context)
-            reply = (
-                "Dien giai quan trong hon khi ban do mo hoi nhieu, tap lau hoac tap trong moi truong nong. "
-                "Neu buoi tap nhe va ban an uong binh thuong, uu tien bu nuoc va an lai mot bua hop ly la du."
-            )
-            return f"{reply} {kb_note}".strip() if kb_note else reply
+        if response_mode == "general_recovery_coaching":
+            return self._build_general_recovery_reply(kb_context)
 
-        if isinstance(kb_context, list) and kb_context:
+        if response_mode == "general_grounded_answer" and isinstance(kb_context, list) and kb_context:
             return self._answer_from_kb(kb_context)
 
         return self._build_general_reply(message)
 
+    def _build_general_goal_reply(self, kb_context: object) -> str:
+        kb_note = self._build_kb_note(kb_context)
+        reply = (
+            "De giam can ben vung, ban nen giu tham hut calo vua phai, uu tien protein on dinh, "
+            "an cac bua de bam lau va tap deu trong vai tuan de theo doi tien do."
+        )
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
+    def _build_general_recovery_reply(self, kb_context: object) -> str:
+        kb_note = self._build_kb_note(kb_context)
+        reply = (
+            "Dien giai quan trong hon khi ban do mo hoi nhieu, tap lau hoac tap trong moi truong nong. "
+            "Neu buoi tap nhe va ban an uong binh thuong, uu tien bu nuoc va an lai mot bua hop ly la du."
+        )
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
     def _build_general_reply(self, message: str) -> str:
         cleaned_message = " ".join(repair_mojibake(message).strip().split())
-        normalized_message = robust_normalize_text(cleaned_message)
-
-        if any(marker in normalized_message for marker in ["tai khoan ngan hang", "mo tai khoan", "ngan hang"]):
-            return (
-                "Ban co the bat dau bang cach chon ngan hang, chuan bi CCCD hoac giay to tuy than, "
-                "roi dang ky tren app hoac ra chi nhanh de xac thuc thong tin theo huong dan cua ngan hang do."
-            )
-
         if cleaned_message:
             return (
-                f"Voi cau hoi \"{cleaned_message}\", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. "
-                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
+                f"Voi cau hoi \"{cleaned_message}\", minh goi y ban bat dau tu buoc co ban nhat truoc, "
+                "sau do doi chieu them voi huong dan chinh thuc neu can. "
+                "Neu ban muon, minh co the giup ban tach tiep thanh cac buoc ngan gon hon."
             )
         return (
             "Minh co the giup ban tra loi ngan gon va thuc te hon neu ban noi ro hon dieu ban muon hoi."

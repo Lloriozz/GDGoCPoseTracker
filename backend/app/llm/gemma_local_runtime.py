@@ -37,6 +37,7 @@ PROMPT_LEAK_LINE_PREFIXES = (
     "cac muc chua co trong catalog",
     "phan da tinh bang catalog hien co",
     "kinh nghiem tap",
+    "kinh nghien tap",
     "muc tieu",
     "muc van dong",
     "so buoi tap/tuan",
@@ -71,6 +72,7 @@ PROMPT_LEAK_MARKERS = (
     "system_prompt",
     "profile hien dai",
     "profile hieuplan",
+    "kinh nghien tap",
     "khong nhac den",
     "khong viet cac nhan",
     "nhan noi bo",
@@ -401,30 +403,35 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _build_system_prompt(self, prompt: dict[str, object]) -> str:
         base_system = str(prompt.get("system_prompt", "")).strip()
-        intent = str(prompt.get("intent", "general_fitness_qa"))
+        route = self._resolve_llm_route(prompt)
+        route_mode = str(route.get("mode", "")).strip()
         shared_rules = (
-            "Tra loi bang tieng Viet tu nhien, khong lap lai cau hoi cua user. "
-            "Khong nhac den prompt, tool_results, response_rules, intent, history hay nhan noi bo. "
-            "Khong viet cac nhan nhu Final Answer, Response hay Giai dap cuoi cung. "
-            "Neu da co so lieu tu tool thi dung dung cac so do."
+            "Tra loi bang tieng Viet tu nhien, khong lap lai cau hoi, "
+            "khong dien tiep mau prompt, va giu cau tra loi gon ro. "
+            "Neu da co so lieu da tinh san thi dung dung cac so do do."
         )
-        if intent == "nutrition_llm_fallback":
+        if route_mode == "nutrition_fallback":
             persona_rules = (
                 "Ban la tro ly huu ich noi tieng Viet, chuyen uoc luong dinh duong thuc dung. "
                 "Hay tra loi ngan gon, than trong, va noi ro day chi la uoc luong low-confidence neu catalog chua co du lieu."
             )
-        elif intent == "general_fitness_qa":
+        elif route_mode == "general_out_of_domain":
+            persona_rules = (
+                "Ban la tro ly huu ich noi tieng Viet. "
+                "Tra loi ngan gon, truc tiep, va khong keo them boi canh fitness neu cau hoi khong lien quan."
+            )
+        elif route_mode.startswith("general_"):
             persona_rules = (
                 "Ban la tro ly huu ich noi tieng Viet. "
                 "Tra loi nhu dang tro chuyen truc tiep voi nguoi dung, "
-                "khong dien tiep mau prompt hay liet ke lai cac nhan boi canh. "
+                "khong liet ke lai cac nhan boi canh. "
                 "Chi dua vao knowledge context neu no that su lien quan voi cau hoi hien tai."
             )
         else:
             persona_rules = (
                 "Ban la tro ly fitness noi tieng Viet. "
-                "Tra loi truc tiep, huu ich, va tong hop tu profile, history, va knowledge context. "
-                "Neu da co tool results thi dung chung, neu khong thi khong tu bo sung so lieu tinh toan."
+                "Tra loi truc tiep, huu ich, va tong hop tu du lieu da co. "
+                "Neu khong co so lieu tinh san thi khong tu bo sung so lieu tinh toan."
             )
         return "\n".join(part for part in [base_system, persona_rules, shared_rules] if part)
 
@@ -435,10 +442,12 @@ class LocalGemmaInferencer(BaseLLMBackend):
         kb_context = self._format_kb_context_for_prompt(prompt)
         history = self._format_history(prompt.get("history", []))
         message = str(prompt.get("message", "")).strip()
-        intent = str(prompt.get("intent", "")).strip()
-        answer_brief = self._build_answer_brief(prompt)
+        route = self._resolve_llm_route(prompt)
+        route_mode = str(route.get("mode", "")).strip()
+        prompt_style = str(route.get("prompt_style", "")).strip()
+        answer_brief = str(route.get("answer_brief", "")).strip() or self._build_answer_brief(prompt)
 
-        if intent == "nutrition_llm_fallback":
+        if prompt_style == "nutrition_fallback":
             fallback_items = prompt.get("nutrition_fallback_items", [])
             rendered_items = ""
             if isinstance(fallback_items, list) and fallback_items:
@@ -463,47 +472,31 @@ class LocalGemmaInferencer(BaseLLMBackend):
             ]
             return "\n\n".join(part for part in parts if part)
 
-        if intent == "general_fitness_qa":
+        if prompt_style == "general_minimal":
             return self._build_general_user_prompt(
                 message=message,
                 profile_summary=profile_summary,
                 history=history,
                 kb_context=kb_context,
+                include_profile_context=bool(route.get("include_profile_context", True)),
+                include_history_context=bool(route.get("include_history_context", True)),
+                include_kb_context=bool(route.get("include_kb_context", True)),
             )
 
-        if intent == "request_meal_guidance":
+        if prompt_style == "grounded_guidance":
             return self._build_grounded_guidance_prompt(
                 message=message,
                 profile_summary=profile_summary,
                 personalization_summary=personalization_summary,
                 history=history,
                 tool_context=tool_results,
-                tool_context_label="Neu da co khung so lieu lien quan, hay xem day la du lieu uu tien:",
+                tool_context_label=str(route.get("tool_context_label", "")).strip(),
                 kb_context=kb_context,
                 answer_brief=answer_brief,
-                closing_instruction=(
-                    "Dua ra khung bua an goi y thuc te, uu tien mon de ap dung, "
-                    "va chi nhac den calories/macro neu prompt co san so lieu ro rang."
-                ),
+                closing_instruction=str(route.get("closing_instruction", "")).strip(),
             )
 
-        if intent == "request_workout_plan":
-            return self._build_grounded_guidance_prompt(
-                message=message,
-                profile_summary=profile_summary,
-                personalization_summary=personalization_summary,
-                history=history,
-                tool_context=tool_results,
-                tool_context_label="Neu da co mot khung lich tap tam thoi, hay xem day la boi canh uu tien:",
-                kb_context=kb_context,
-                answer_brief=answer_brief,
-                closing_instruction=(
-                    "Dua ra lich tap hoac split goi y bang ngon ngu coach, "
-                    "tap trung vao tinh thuc te va dieu chinh neu co chan thuong hay han che."
-                ),
-            )
-
-        if intent == "request_tdee_macro":
+        if prompt_style == "macro_summary" or route_mode == "macro_summary":
             parts = [
                 f"User dang hoi: {message}",
                 f"Profile lien quan: {profile_summary}" if profile_summary else "",
@@ -522,6 +515,56 @@ class LocalGemmaInferencer(BaseLLMBackend):
         ]
         return "\n\n".join(part for part in parts if part)
 
+    def _resolve_llm_route(self, prompt: dict[str, object]) -> dict[str, object]:
+        raw_route = prompt.get("llm_route", {})
+        if isinstance(raw_route, dict) and raw_route:
+            return raw_route
+        return self._build_default_llm_route(prompt)
+
+    def _build_default_llm_route(self, prompt: dict[str, object]) -> dict[str, object]:
+        intent = str(prompt.get("intent", "general_fitness_qa")).strip()
+        domain_scope = str(prompt.get("domain_scope", "fitness")).strip()
+
+        if intent == "nutrition_llm_fallback":
+            return {
+                "mode": "nutrition_fallback",
+                "prompt_style": "nutrition_fallback",
+                "include_profile_context": False,
+                "include_history_context": False,
+                "include_kb_context": False,
+            }
+        if intent == "request_tdee_macro":
+            return {"mode": "macro_summary", "prompt_style": "macro_summary"}
+        if intent == "request_meal_guidance":
+            return {
+                "mode": "meal_guidance",
+                "prompt_style": "grounded_guidance",
+                "tool_context_label": "Neu da co khung so lieu lien quan, hay xem day la du lieu uu tien:",
+                "closing_instruction": (
+                    "Dua ra khung bua an goi y thuc te, uu tien mon de ap dung, "
+                    "va chi nhac den calories/macro neu prompt co san so lieu ro rang."
+                ),
+            }
+        if intent == "request_workout_plan":
+            return {
+                "mode": "workout_guidance",
+                "prompt_style": "grounded_guidance",
+                "tool_context_label": "Neu da co mot khung lich tap tam thoi, hay xem day la boi canh uu tien:",
+                "closing_instruction": (
+                    "Dua ra lich tap hoac split goi y bang ngon ngu coach, "
+                    "tap trung vao tinh thuc te va dieu chinh neu co chan thuong hay han che."
+                ),
+            }
+
+        include_context = domain_scope != "out_of_domain"
+        return {
+            "mode": "general_out_of_domain" if not include_context else "general_default",
+            "prompt_style": "general_minimal",
+            "include_profile_context": include_context,
+            "include_history_context": include_context,
+            "include_kb_context": include_context,
+        }
+
     def _build_general_user_prompt(
         self,
         *,
@@ -529,17 +572,20 @@ class LocalGemmaInferencer(BaseLLMBackend):
         profile_summary: str,
         history: str,
         kb_context: str,
+        include_profile_context: bool,
+        include_history_context: bool,
+        include_kb_context: bool,
     ) -> str:
         parts = [message]
 
-        if profile_summary:
+        if include_profile_context and profile_summary:
             parts.append(f"Neu can ca nhan hoa, hay dua tren thong tin nay: {profile_summary}.")
-        if history:
+        if include_history_context and history:
             parts.append(
                 "Neu lien quan, hay noi tiep mach hoi thoai gan day thay vi bat dau lai tu dau:\n"
                 f"{history}"
             )
-        if kb_context:
+        if include_kb_context and kb_context:
             parts.append(
                 "Neu mot y nao ben duoi thuc su giup ich, hay dien dat lai bang loi cua ban thay vi chep nguyen van:\n"
                 f"{kb_context}"
@@ -604,13 +650,19 @@ class LocalGemmaInferencer(BaseLLMBackend):
             if summary:
                 return summary
 
+        if intent == "request_meal_guidance" and isinstance(tool_results, dict):
+            meal_plan = tool_results.get("meal_plan", {})
+            summary = self._format_meal_plan_summary(meal_plan)
+            if summary:
+                return summary
+
         return self._format_json(tool_results)
 
     def _format_kb_context_for_prompt(self, prompt: dict[str, object]) -> str:
         intent = str(prompt.get("intent", ""))
         kb_context = prompt.get("kb_context", [])
         formatted = self._format_kb_context(kb_context)
-        if intent != "request_workout_plan" or not isinstance(kb_context, list):
+        if intent not in {"request_workout_plan", "request_meal_guidance"} or not isinstance(kb_context, list):
             return formatted
 
         concise_entries: list[str] = []
@@ -619,7 +671,13 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 continue
             category = str(item.get("category", ""))
             section = str(item.get("section", ""))
-            if not (category.startswith(("workout", "recovery")) or section in {"workout", "recovery"}):
+            if intent == "request_workout_plan":
+                if not (category.startswith(("workout", "recovery")) or section in {"workout", "recovery"}):
+                    continue
+            elif not (
+                category.startswith(("meal", "recovery"))
+                or section in {"meal", "nutrition", "recovery", "fasting"}
+            ):
                 continue
             title = str(item.get("title", "")).strip()
             content = str(item.get("content", "")).strip()
@@ -681,6 +739,54 @@ class LocalGemmaInferencer(BaseLLMBackend):
         if notes_summary:
             sections.append(notes_summary)
         sections.extend(day_summaries)
+        return "\n".join(sections)
+
+    def _format_meal_plan_summary(self, meal_plan: object) -> str:
+        if not isinstance(meal_plan, dict) or not meal_plan:
+            return ""
+
+        target_calories = int(meal_plan.get("target_calories", 0) or 0)
+        protein_g = int(meal_plan.get("protein_g", 0) or 0)
+        carb_g = int(meal_plan.get("carb_g", 0) or 0)
+        fat_g = int(meal_plan.get("fat_g", 0) or 0)
+        meals = meal_plan.get("meals", [])
+        notes = meal_plan.get("notes", [])
+
+        parts = [
+            f"Target calories: {target_calories}" if target_calories else "",
+            (
+                f"Macro muc tieu: {protein_g}g protein | {carb_g}g carb | {fat_g}g fat"
+                if any([protein_g, carb_g, fat_g])
+                else ""
+            ),
+        ]
+
+        meal_summaries: list[str] = []
+        if isinstance(meals, list):
+            for meal in meals[:4]:
+                if not isinstance(meal, dict):
+                    continue
+                name = str(meal.get("name", "")).strip()
+                example = str(meal.get("example", "")).strip()
+                calories = int(meal.get("calories", 0) or 0)
+                protein = int(meal.get("protein_g", 0) or 0)
+                carbs = int(meal.get("carb_g", 0) or 0)
+                fat = int(meal.get("fat_g", 0) or 0)
+                segment = f"- {name}: ~{calories} kcal, {protein}g protein, {carbs}g carb, {fat}g fat"
+                if example:
+                    segment += f". Vi du: {example}."
+                meal_summaries.append(segment)
+
+        notes_summary = ""
+        if isinstance(notes, list) and notes:
+            kept_notes = [str(note).strip() for note in notes[:2] if str(note).strip()]
+            if kept_notes:
+                notes_summary = "Luu y chinh: " + "; ".join(kept_notes) + "."
+
+        sections = [part for part in parts if part]
+        if notes_summary:
+            sections.append(notes_summary)
+        sections.extend(meal_summaries)
         return "\n".join(sections)
 
     def _render_messages(self, messages: list[dict[str, str]]) -> Any:
@@ -818,64 +924,21 @@ class LocalGemmaInferencer(BaseLLMBackend):
         return cleaned
 
     def _ground_response(self, text: str, prompt: dict[str, object]) -> str:
-        intent = str(prompt.get("intent", ""))
-        if intent == "request_tdee_macro":
-            tool_results = prompt.get("tool_results", {})
-            macros = tool_results.get("macros", {}) if isinstance(tool_results, dict) else {}
-            if isinstance(macros, dict) and macros:
-                expected_values = [
-                    str(macros.get("target_calories")),
-                    str(macros.get("protein_g")),
-                    str(macros.get("fat_g")),
-                    str(macros.get("carb_g")),
-                ]
-                if not all(value in text for value in expected_values):
-                    return self._fallback_for_prompt(prompt)
-        if self._contains_generation_noise(text):
+        candidate = text.strip()
+        if not candidate:
             return self._fallback_for_prompt(prompt)
 
-        normalized = normalize_text(text)
-        if self._looks_like_prompt_leak(text, normalized):
-            return self._fallback_for_prompt(prompt)
-        if intent == "general_fitness_qa":
-            invalid_markers = [
-                "neu co thong tin nao can thiet",
-                "giai dap cuoi cung",
-                "thong tin chi tiet",
-                "trang vu",
-                "trinh vu",
-                "intent:",
-                "profile:",
-                "tool results",
-                "tool_results",
-                "history:",
-                "ban mock",
-                "safety case",
-                "tool_settings",
-                "hay chi su dung cac quy tac nay",
-                "response rules",
-                "khong nhac den",
-                "khong viet cac nhan",
-                "nhan noi bo",
-                "tra loi bang tieng viet",
-            ]
-            if any(marker in normalized for marker in invalid_markers):
-                return self._fallback_for_prompt(prompt)
-        if intent == "request_workout_plan":
-            if any(marker in normalized for marker in ["bua sang", "bua trua", "bua toi", "thuc don"]):
-                return self._fallback_for_prompt(prompt)
-        if intent == "nutrition_llm_fallback":
-            invalid_markers = [
-                "intent:",
-                "tool results",
-                "tool_results",
-                "history:",
-                "profile:",
-                "ban mock",
-            ]
-            if any(marker in normalized for marker in invalid_markers):
-                return self._fallback_for_prompt(prompt)
-        return text
+        for _ in range(2):
+            normalized = normalize_text(candidate)
+            if not self._is_invalid_grounded_response(candidate, normalized, prompt):
+                return candidate
+
+            repaired = self._repair_generated_text(candidate, prompt)
+            if not repaired or repaired == candidate:
+                break
+            candidate = repaired
+
+        return self._fallback_for_prompt(prompt)
 
     def _fallback_for_prompt(self, prompt: dict[str, object]) -> str:
         intent = str(prompt.get("intent", "general_fitness_qa"))
@@ -931,52 +994,28 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _render_general_fallback(self, prompt: dict[str, object]) -> str:
         message = str(prompt.get("message", "")).strip()
+        domain_scope = str(prompt.get("domain_scope", "fitness")).strip()
         kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=2)
         if not message:
             if kb_note:
                 return kb_note
             return "Minh co the tra loi ngan gon va thuc te hon neu ban noi ro hon muc tieu hoac dieu ban muon hoi."
 
-        normalized_message = normalize_text(message)
-        compact_message = re.sub(r"[^a-z0-9]+", "", normalized_message)
-        if any(keyword in compact_message for keyword in ["tapxong", "moitapxong", "sautap"]):
+        if domain_scope != "out_of_domain" and kb_note:
             reply = (
-                "Sau tap, ban nen uu tien mot bua co protein ro rang kem carb de hoi phuc tot hon, "
-                "vi du com + uc ga, bun + trung, hoac sua chua + chuoi neu can gon nhe."
+                f'Ve cau hoi "{message}", minh tom tat nhanh y lien quan nhat de ban de ap dung hon.'
             )
-        elif any(keyword in compact_message for keyword in ["giamcan", "giammo", "fatloss"]):
-            reply = (
-                "Neu dang giam can, ban nen uu tien bua co protein ro rang, rau de no lau, "
-                "va giu phan carb vua du, vi du uc ga + rau + com it hon, trung + salad + khoai, hoac dau hu + rau + com."
-            )
-        elif (
-            any(keyword in compact_message for keyword in ["chiphi", "hetbao", "baonhieu", "tien1ngay"])
-            or "chi phi" in normalized_message
-            or ("bao" in normalized_message and "1" in normalized_message)
-        ):
-            reply = (
-                "Chi phi moi ngay se phu thuoc vao khau phan va loai thuc pham ban chon, "
-                "nhung neu muon toi uu thi co the uu tien trung, dau hu, uc ga, com va rau de vua de bam vua de kiem soat ngan sach."
-            )
-        elif any(keyword in compact_message for keyword in ["taikhoan", "motaikhoan", "nganhang"]):
-            reply = (
-                "De mo tai khoan ngan hang, ban co the bat dau bang cach chon ngan hang, chuan bi CCCD hoac giay to tuy than, "
-                "roi dang ky tren app hoac ra chi nhanh de xac thuc thong tin theo huong dan cua ngan hang do."
-            )
-        elif any(keyword in compact_message for keyword in ["tapgym", "conentapgym", "cotaptapgym"]):
-            reply = (
-                "Neu suc khoe hien tai on va ban muon cai thien the luc, tap gym la mot lua chon rat on "
-                "mien la ban bat dau voi muc vua phai, hoc ky thuat tu tu, va duy tri deu."
-            )
-        else:
-            reply = (
-                f'Voi cau hoi "{message}", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. '
-                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
-            )
-
-        if kb_note:
             return f"{reply} {kb_note}"
-        return reply
+        if domain_scope == "out_of_domain":
+            return (
+                f'Ve cau hoi "{message}", minh goi y ban bat dau tu buoc co ban nhat truoc '
+                "roi doi chieu them voi huong dan chinh thuc neu can. "
+                "Neu ban muon, minh co the giup ban tach tiep thanh cac buoc ngan gon hon."
+            )
+        return (
+            f'Ve cau hoi "{message}", minh goi y ban bat dau tu mot buoc don gian va dieu chinh theo muc tieu hien tai. '
+            "Neu ban muon, minh co the di sau hon theo huong bua an, workout hoac recovery cu the hon."
+        )
 
     def _render_default_fallback(self, prompt: dict[str, object]) -> str:
         message = str(prompt.get("message", "")).strip()
@@ -986,6 +1025,112 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
             )
         return "Minh can them mot chut thong tin de tra loi sat hon."
+
+    def _is_invalid_grounded_response(
+        self,
+        text: str,
+        normalized: str,
+        prompt: dict[str, object],
+    ) -> bool:
+        intent = str(prompt.get("intent", ""))
+        domain_scope = str(prompt.get("domain_scope", "fitness")).strip()
+        if self._contains_generation_noise(text):
+            return True
+        if self._looks_like_prompt_leak(text, normalized):
+            return True
+
+        if intent == "request_tdee_macro":
+            tool_results = prompt.get("tool_results", {})
+            macros = tool_results.get("macros", {}) if isinstance(tool_results, dict) else {}
+            if isinstance(macros, dict) and macros:
+                expected_values = [
+                    str(macros.get("target_calories")),
+                    str(macros.get("protein_g")),
+                    str(macros.get("fat_g")),
+                    str(macros.get("carb_g")),
+                ]
+                if not all(value in text for value in expected_values):
+                    return True
+
+        common_invalid_markers = [
+            "intent:",
+            "profile:",
+            "tool results",
+            "tool_results",
+            "history:",
+            "response rules",
+            "khong nhac den",
+            "khong viet cac nhan",
+            "nhan noi bo",
+            "tra loi bang tieng viet",
+            "ban mock",
+        ]
+        if any(marker in normalized for marker in common_invalid_markers):
+            return True
+
+        if intent == "general_fitness_qa":
+            general_invalid_markers = [
+                "neu co thong tin nao can thiet",
+                "giai dap cuoi cung",
+                "thong tin chi tiet",
+                "safety case",
+                "tool_settings",
+                "thongtin tham khao",
+                "user_context",
+                "profile_final",
+                "medlatec",
+                "kinh nghien tap",
+            ]
+            if any(marker in normalized for marker in general_invalid_markers):
+                return True
+            if domain_scope == "out_of_domain" and any(
+                marker in normalized
+                for marker in ["protein", "macro", "bua sang", "thuc don", "split", "workout", "calories muc tieu"]
+            ):
+                return True
+
+        if intent == "request_meal_guidance":
+            if any(marker in normalized for marker in ["split", "upper/lower", "push/pull", "leg press", "face pull"]):
+                return True
+            if not any(marker in normalized for marker in ["bua sang", "bua trua", "bua phu", "bua toi"]):
+                return True
+
+        if intent == "request_workout_plan":
+            if any(marker in normalized for marker in ["bua sang", "bua trua", "bua toi", "thuc don"]):
+                return True
+            if not any(marker in normalized for marker in ["split", "buoi", "lich tap", "full body", "upper/lower", "push/pull"]):
+                return True
+
+        if intent == "nutrition_llm_fallback":
+            if any(marker in normalized for marker in ["intent:", "tool results", "tool_results", "history:", "profile:"]):
+                return True
+
+        return False
+
+    def _repair_generated_text(self, text: str, prompt: dict[str, object]) -> str:
+        repaired = self._strip_prompt_leak_lines(text).strip()
+        if not repaired:
+            return ""
+
+        repaired = re.sub(r"^(final answer|response|assistant)\s*[:\-]\s*", "", repaired, flags=re.IGNORECASE)
+        repaired = re.sub(r"\n{3,}", "\n\n", repaired).strip()
+
+        user_message = str(prompt.get("message", "")).strip()
+        normalized_user = normalize_text(user_message)
+        kept_lines: list[str] = []
+        for line in repaired.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped == "```" or self._is_control_line(stripped):
+                continue
+            normalized_line = normalize_text(stripped).strip(" .:-_;")
+            if any(normalized_line.startswith(prefix) for prefix in PROMPT_LEAK_LINE_PREFIXES):
+                continue
+            if normalize_text(stripped) == normalized_user:
+                continue
+            if kept_lines and stripped == kept_lines[-1]:
+                continue
+            kept_lines.append(stripped)
+        return "\n".join(kept_lines).strip()
 
 
     def _summarize_kb_context(self, kb_context: object, max_items: int = 2) -> str:

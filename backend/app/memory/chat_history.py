@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.db.database import get_connection
+from app.db.database import get_connection, normalize_user_id
 
 
 class ChatTurn(BaseModel):
@@ -37,6 +37,7 @@ class ChatHistoryStore:
         user_message: str,
         assistant_message: str,
     ) -> None:
+        user_id = normalize_user_id(user_id)
         with get_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(

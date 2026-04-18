@@ -15,7 +15,9 @@ from app.tools.nutrition_calculator import (
     build_nutrition_reply,
     looks_like_nutrition_request,
 )
+from app.tools.macros import calculate_macros
 from app.tools.tdee import calculate_tdee
+from app.tools.workout_plan import generate_workout_plan
 
 
 class FitnessChatOrchestrator:
@@ -78,12 +80,8 @@ class FitnessChatOrchestrator:
                 tool_results={},
             )
 
-        tool_results: dict[str, object] = {}
-        if intent == "request_tdee_macro":
-            tool_results["tdee"] = calculate_tdee(profile)
-            from app.tools.macros import calculate_macros
-
-            tool_results["macros"] = calculate_macros(profile)
+        tool_results = self._build_tool_results(intent=intent, profile=profile)
+        domain_scope = self._classify_domain_scope(request.message, intent)
 
         kb_context = self._build_knowledge_context(
             message=request.message,
@@ -94,10 +92,18 @@ class FitnessChatOrchestrator:
         prompt = {
             "system_prompt": self._build_prompt_system(intent),
             "profile_summary": self._build_light_profile_summary(profile),
+            "personalization_summary": self._build_personalization_summary(profile, intent),
             "profile_data": profile.model_dump(),
             "history": history[-3:],
             "message": request.message,
             "intent": intent,
+            "domain_scope": domain_scope,
+            "llm_route": self._build_llm_route(
+                message=request.message,
+                intent=intent,
+                domain_scope=domain_scope,
+                kb_context=kb_context,
+            ),
             "tool_results": tool_results,
             "kb_context": kb_context,
         }
@@ -191,9 +197,6 @@ class FitnessChatOrchestrator:
         return any(phrase in lowered for phrase in explicit_phrases)
 
     def _classify_knowledge_topics(self, message: str, intent: str) -> set[str]:
-        if intent != "general_fitness_qa":
-            return set()
-
         lowered = robust_normalize_text(message)
         topics: set[str] = set()
 
@@ -211,6 +214,9 @@ class FitnessChatOrchestrator:
             "thay mon",
             "thay the",
             "tiet kiem",
+            "chi phi",
+            "bao nhieu tien",
+            "het bao nhieu",
         ]
         nutrition_markers = [
             "dinh duong",
@@ -249,6 +255,8 @@ class FitnessChatOrchestrator:
             "doms",
             "dau co",
             "ngu",
+            "tap xong",
+            "moi tap xong",
         ]
         fasting_markers = [
             "fasting",
@@ -256,6 +264,21 @@ class FitnessChatOrchestrator:
             "intermittent fasting",
             "an theo gio",
         ]
+
+        if intent == "request_meal_guidance":
+            topics.update({"meal", "nutrition"})
+            if any(marker in lowered for marker in recovery_markers):
+                topics.add("recovery")
+            if any(marker in lowered for marker in fasting_markers):
+                topics.add("fasting")
+            return topics
+
+        if intent == "request_workout_plan":
+            topics.update({"workout", "recovery"})
+            return topics
+
+        if intent != "general_fitness_qa":
+            return set()
 
         if any(marker in lowered for marker in meal_markers):
             topics.add("meal")
@@ -320,15 +343,21 @@ class FitnessChatOrchestrator:
         if intent not in {"request_meal_guidance", "request_workout_plan"}:
             return []
 
+        topics = self._classify_knowledge_topics(message, intent)
+        kb_prefixes = self._kb_category_prefixes_for_topics(topics)
+        wiki_sections = self._wiki_sections_for_topics(topics)
+
         base_context = self.retriever.retrieve(
             message=message,
             intent=intent,
             profile=profile,
+            allowed_category_prefixes=kb_prefixes or None,
         )
         wiki_context = self.wiki_retriever.retrieve(
             message=message,
             intent=intent,
             profile=profile,
+            allowed_sections=wiki_sections or None,
         )
         return self._merge_knowledge_contexts(base_context, wiki_context)
 
@@ -376,6 +405,10 @@ class FitnessChatOrchestrator:
     def _collect_missing_fields(self, intent: str, profile) -> list[str]:
         if intent == "request_tdee_macro":
             required = ["age", "sex", "height_cm", "weight_kg", "activity_level", "goal"]
+        elif intent == "request_meal_guidance":
+            required = ["age", "sex", "height_cm", "weight_kg", "activity_level", "goal"]
+        elif intent == "request_workout_plan":
+            required = ["goal", "workout_days_per_week", "train_location"]
         else:
             required = []
 
@@ -389,14 +422,17 @@ class FitnessChatOrchestrator:
         if intent == "request_tdee_macro":
             return (
                 "Ban la tro ly fitness noi tieng Viet. "
-                "Neu da co so lieu tu tool thi dung dung cac so do. "
-                "Tra loi ngan gon, ro rang, va khong lo prompt noi bo."
+                "Hay bam sat so lieu da tinh san, giai thich ngan gon, va giu cau tra loi ro rang."
+            )
+        if intent in {"request_meal_guidance", "request_workout_plan"}:
+            return (
+                "Ban la tro ly fitness noi tieng Viet. "
+                "Hay tong hop du lieu da co thanh goi y thuc te, ngan gon, va de ap dung."
             )
         return (
             "Ban la tro ly huu ich noi tieng Viet. "
-            "Tra loi tu nhien, thuc te, va bam sat cau hoi hien tai. "
-            "Neu co knowledge context lien quan thi dung no de tra loi chac hon, "
-            "nhung khong lo prompt noi bo hay bien moi cau hoi thanh mot flow may moc."
+            "Tra loi tu nhien, thuc te, va chi bam vao cau hoi hien tai. "
+            "Neu co context lien quan thi tong hop bang loi cua ban thay vi liet ke noi bo."
         )
 
     def _build_light_profile_summary(self, profile) -> str:
@@ -430,6 +466,346 @@ class FitnessChatOrchestrator:
             fields.append(f"Mon khong thich: {', '.join(profile.disliked_foods)}")
 
         return "; ".join(fields)
+
+    def _build_personalization_summary(self, profile, intent: str) -> str:
+        notes: list[str] = []
+
+        if getattr(profile, "goal_detail", None):
+            notes.append(f"Chi tiet muc tieu: {profile.goal_detail}")
+
+        if intent == "request_workout_plan":
+            if getattr(profile, "experience_level", None):
+                notes.append(f"Trinh do hien tai: {profile.experience_level}")
+            if getattr(profile, "injuries", None):
+                notes.append(f"Can tranh kich ung cho: {', '.join(profile.injuries)}")
+        elif intent == "request_meal_guidance":
+            if getattr(profile, "budget_level", None):
+                notes.append(f"Ngan sach: {profile.budget_level}")
+            if getattr(profile, "cook_time_preference", None):
+                notes.append(f"Thoi gian nau: {profile.cook_time_preference}")
+            if getattr(profile, "diet_preferences", None):
+                notes.append(f"Cach an uu tien: {', '.join(profile.diet_preferences)}")
+            if getattr(profile, "allergies", None):
+                notes.append(f"Can tranh: {', '.join(profile.allergies)}")
+            if getattr(profile, "preferred_foods", None):
+                notes.append(f"Mon ua thich: {', '.join(profile.preferred_foods)}")
+            if getattr(profile, "disliked_foods", None):
+                notes.append(f"Mon khong thich: {', '.join(profile.disliked_foods)}")
+
+        return "; ".join(notes)
+
+    def _classify_domain_scope(self, message: str, intent: str) -> str:
+        if intent != "general_fitness_qa":
+            return "grounded"
+        if self._classify_knowledge_topics(message, intent):
+            return "fitness"
+        return "out_of_domain"
+
+    def _build_llm_route(
+        self,
+        *,
+        message: str,
+        intent: str,
+        domain_scope: str,
+        kb_context: list[dict[str, object]],
+    ) -> dict[str, object]:
+        if intent == "nutrition_llm_fallback":
+            return {
+                "mode": "nutrition_fallback",
+                "prompt_style": "nutrition_fallback",
+                "answer_brief": self._build_llm_answer_brief("nutrition_fallback"),
+                "include_profile_context": False,
+                "include_history_context": False,
+                "include_kb_context": False,
+            }
+
+        if intent == "request_tdee_macro":
+            return {
+                "mode": "macro_summary",
+                "prompt_style": "macro_summary",
+                "answer_brief": self._build_llm_answer_brief("macro_summary"),
+                "include_profile_context": True,
+                "include_history_context": False,
+                "include_kb_context": False,
+            }
+
+        if intent == "request_meal_guidance":
+            return {
+                "mode": "meal_guidance",
+                "prompt_style": "grounded_guidance",
+                "answer_brief": self._build_llm_answer_brief("meal_guidance"),
+                "tool_context_label": "Neu da co khung so lieu lien quan, hay xem day la du lieu uu tien:",
+                "closing_instruction": (
+                    "Dua ra khung bua an goi y thuc te, uu tien mon de ap dung, "
+                    "va chi nhac den calories/macro neu prompt co san so lieu ro rang."
+                ),
+                "include_profile_context": True,
+                "include_history_context": True,
+                "include_kb_context": True,
+            }
+
+        if intent == "request_workout_plan":
+            return {
+                "mode": "workout_guidance",
+                "prompt_style": "grounded_guidance",
+                "answer_brief": self._build_llm_answer_brief("workout_guidance"),
+                "tool_context_label": "Neu da co mot khung lich tap tam thoi, hay xem day la boi canh uu tien:",
+                "closing_instruction": (
+                    "Dua ra lich tap hoac split goi y bang ngon ngu coach, "
+                    "tap trung vao tinh thuc te va dieu chinh neu co chan thuong hay han che."
+                ),
+                "include_profile_context": True,
+                "include_history_context": True,
+                "include_kb_context": True,
+            }
+
+        general_mode = self._classify_general_llm_mode(
+            message=message,
+            domain_scope=domain_scope,
+            kb_context=kb_context,
+        )
+        include_context = general_mode != "general_out_of_domain"
+        return {
+            "mode": general_mode,
+            "prompt_style": "general_minimal",
+            "answer_brief": "",
+            "include_profile_context": include_context,
+            "include_history_context": include_context,
+            "include_kb_context": include_context,
+        }
+
+    def _build_llm_answer_brief(self, route_mode: str) -> str:
+        briefs = {
+            "macro_summary": "Tom tat ngan gon calories muc tieu va macro theo dung so trong du lieu.",
+            "meal_guidance": (
+                "Tao khung 3-5 bua an ro rang, moi bua co vi du mon ngan gon va de hieu, "
+                "dua tren profile va knowledge context."
+            ),
+            "workout_guidance": (
+                "Viet 1 doan ngan kieu coach, goi y split va cach sap buoi tap dua tren profile "
+                "va knowledge context, khong can JSON."
+            ),
+            "nutrition_fallback": (
+                "Uoc luong so bo cho tung muc chua co trong catalog, neu can thi dua ra khoang kcal "
+                "thay vi mot con so cung. Noi ro day la uoc luong low-confidence."
+            ),
+        }
+        return briefs.get(route_mode, "")
+
+    def _classify_general_llm_mode(
+        self,
+        *,
+        message: str,
+        domain_scope: str,
+        kb_context: list[dict[str, object]],
+    ) -> str:
+        if domain_scope == "out_of_domain":
+            return "general_out_of_domain"
+
+        lowered = robust_normalize_text(message)
+        if self._looks_like_cost_question(lowered):
+            return "general_cost_coaching"
+        if self._looks_like_general_meal_question(lowered):
+            return "general_meal_coaching"
+        if self._looks_like_general_workout_question(lowered):
+            return "general_workout_coaching"
+        if self._looks_like_goal_coaching_question(lowered):
+            return "general_goal_coaching"
+        if self._looks_like_recovery_question(lowered):
+            return "general_recovery_coaching"
+        if kb_context:
+            return "general_grounded_answer"
+        return "general_default"
+
+    def _looks_like_cost_question(self, lowered: str) -> bool:
+        return any(marker in lowered for marker in ["bao nhieu tien", "chi phi", "het bao nhieu"])
+
+    def _looks_like_general_meal_question(self, lowered: str) -> bool:
+        meal_markers = [
+            "nen an gi",
+            "an gi",
+            "mon viet",
+            "protein",
+            "tiet kiem",
+            "lich an",
+            "thuc don",
+            "goi y mon",
+        ]
+        return any(marker in lowered for marker in meal_markers)
+
+    def _looks_like_general_workout_question(self, lowered: str) -> bool:
+        workout_markers = [
+            "lich tap",
+            "split",
+            "tap chan",
+            "dau goi",
+            "co nen tap gym",
+            "tap gym",
+            "bai tap",
+        ]
+        return any(marker in lowered for marker in workout_markers)
+
+    def _looks_like_goal_coaching_question(self, lowered: str) -> bool:
+        return any(marker in lowered for marker in ["giam can", "giam mo", "fat loss"])
+
+    def _looks_like_recovery_question(self, lowered: str) -> bool:
+        return any(marker in lowered for marker in ["dien giai", "bu nuoc", "hydration", "sau tap"])
+
+    def _build_tool_results(self, intent: str, profile) -> dict[str, object]:
+        tool_results: dict[str, object] = {}
+
+        if intent in {"request_tdee_macro", "request_meal_guidance"}:
+            tdee = calculate_tdee(profile)
+            macros = calculate_macros(profile)
+            if tdee:
+                tool_results["tdee"] = tdee
+            if macros:
+                tool_results["macros"] = macros
+
+        if intent == "request_workout_plan":
+            workout_plan = generate_workout_plan(profile)
+            if workout_plan:
+                tool_results["workout_plan"] = workout_plan
+
+        if intent == "request_meal_guidance":
+            macros = tool_results.get("macros", {})
+            if isinstance(macros, dict) and macros:
+                tool_results["meal_plan"] = self._build_meal_plan_scaffold(profile, macros)
+
+        return tool_results
+
+    def _build_meal_plan_scaffold(self, profile, macros: dict[str, object]) -> dict[str, object]:
+        target_calories = int(macros.get("target_calories", 0) or 0)
+        protein_g = int(macros.get("protein_g", 0) or 0)
+        carb_g = int(macros.get("carb_g", 0) or 0)
+        fat_g = int(macros.get("fat_g", 0) or 0)
+        examples = self._build_meal_examples_from_profile(profile)
+        ratios = [
+            ("Bua sang", 0.25, 0.25, 0.25, 0.25, examples[0]),
+            ("Bua trua", 0.30, 0.30, 0.30, 0.30, examples[1]),
+            ("Bua phu", 0.15, 0.15, 0.15, 0.15, examples[2]),
+            ("Bua toi", 0.30, 0.30, 0.30, 0.30, examples[3]),
+        ]
+
+        remaining = {
+            "calories": target_calories,
+            "protein_g": protein_g,
+            "carb_g": carb_g,
+            "fat_g": fat_g,
+        }
+        meals: list[dict[str, object]] = []
+        for index, (name, cal_ratio, protein_ratio, carb_ratio, fat_ratio, example) in enumerate(ratios):
+            is_last = index == len(ratios) - 1
+            if is_last:
+                meal = {
+                    "name": name,
+                    "calories": remaining["calories"],
+                    "protein_g": remaining["protein_g"],
+                    "carb_g": remaining["carb_g"],
+                    "fat_g": remaining["fat_g"],
+                    "example": example,
+                }
+            else:
+                calories = round(target_calories * cal_ratio)
+                protein = round(protein_g * protein_ratio)
+                carbs = round(carb_g * carb_ratio)
+                fat = round(fat_g * fat_ratio)
+                meal = {
+                    "name": name,
+                    "calories": calories,
+                    "protein_g": protein,
+                    "carb_g": carbs,
+                    "fat_g": fat,
+                    "example": example,
+                }
+                remaining["calories"] -= calories
+                remaining["protein_g"] -= protein
+                remaining["carb_g"] -= carbs
+                remaining["fat_g"] -= fat
+            meals.append(meal)
+
+        notes: list[str] = []
+        if getattr(profile, "budget_level", None) == "low":
+            notes.append("Uu tien mon de mua va de prep de bam ngan sach.")
+        if getattr(profile, "cook_time_preference", None) == "quick":
+            notes.append("Uu tien bua co the chuan bi nhanh trong 10-15 phut.")
+        if getattr(profile, "diet_preferences", None):
+            notes.append(f"Luu y cach an: {', '.join(profile.diet_preferences)}")
+        if getattr(profile, "allergies", None):
+            notes.append(f"Can tranh thanh phan: {', '.join(profile.allergies)}")
+
+        return {
+            "target_calories": target_calories,
+            "protein_g": protein_g,
+            "carb_g": carb_g,
+            "fat_g": fat_g,
+            "meals": meals,
+            "notes": notes,
+        }
+
+    def _build_meal_examples_from_profile(self, profile) -> list[str]:
+        normalized_preferences = {
+            robust_normalize_text(str(item)) for item in getattr(profile, "diet_preferences", []) or []
+        }
+        normalized_allergies = {
+            robust_normalize_text(str(item)) for item in getattr(profile, "allergies", []) or []
+        }
+        preferred_foods = [str(item) for item in getattr(profile, "preferred_foods", []) or []]
+        disliked_foods = {
+            robust_normalize_text(str(item)) for item in getattr(profile, "disliked_foods", []) or []
+        }
+
+        if {"vegetarian", "an chay", "vegan"} & normalized_preferences:
+            defaults = [
+                "yen mach + sua dau nanh + chuoi",
+                "com + dau hu + rau",
+                "edamame + khoai + trai cay",
+                "banh mi nguyen cam + dau hu + salad",
+            ]
+        else:
+            defaults = [
+                "yen mach + sua chua + chuoi + whey",
+                "com + uc ga + rau + trai cay",
+                "banh mi nguyen cam + trung",
+                "com hoac khoai + bo nac hoac ca + rau",
+            ]
+
+        if {"milk", "sua", "dairy", "lactose"} & normalized_allergies:
+            defaults = [
+                item.replace("sua chua", "sua dau nanh").replace(" + whey", " + protein thuc vat")
+                for item in defaults
+            ]
+
+        preferred_examples: list[str] = []
+        for item in preferred_foods:
+            normalized = robust_normalize_text(item)
+            if "pho" in normalized:
+                preferred_examples.append("pho ga it mo + trai cay")
+            elif "trung" in normalized:
+                preferred_examples.append("trung + banh mi nguyen cam + trai cay")
+            elif "bun" in normalized:
+                preferred_examples.append("bun ga xe + rau")
+            elif "com" in normalized:
+                preferred_examples.append("com + uc ga + rau")
+            elif "dau hu" in normalized or "tofu" in normalized:
+                preferred_examples.append("dau hu ap chao + com + rau")
+
+        selected: list[str] = []
+        seen: set[str] = set()
+        for candidate in [*preferred_examples, *defaults]:
+            normalized_candidate = robust_normalize_text(candidate)
+            if not candidate or normalized_candidate in seen:
+                continue
+            if any(disliked in normalized_candidate for disliked in disliked_foods if disliked):
+                continue
+            seen.add(normalized_candidate)
+            selected.append(candidate)
+            if len(selected) == 4:
+                break
+
+        while len(selected) < 4:
+            selected.append(defaults[len(selected)])
+        return selected
 
     def _maybe_handle_pending_nutrition_clarification(
         self,
@@ -555,6 +931,13 @@ class FitnessChatOrchestrator:
             "profile_summary": "",
             "personalization_summary": "",
             "profile_data": {},
+            "domain_scope": "grounded",
+            "llm_route": self._build_llm_route(
+                message=original_message,
+                intent="nutrition_llm_fallback",
+                domain_scope="grounded",
+                kb_context=[],
+            ),
             "tool_results": {},
             "nutrition_fallback_items": unmatched_inputs,
             "nutrition_known_totals": estimate.get("totals", {}),

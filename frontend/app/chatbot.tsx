@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../constants/theme';
 import { sendChatMessage } from '../services/chat';
 import { ChatUiMessage } from '../types/chat';
+import { useAuth } from '../contexts/AuthContext';
 
 const quickActions = [
   {
@@ -44,13 +45,14 @@ function buildMessage(role: 'assistant' | 'user', text: string, meta?: string): 
 }
 
 export default function ChatbotScreen() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const sessionId = useMemo(() => `mobile-session-${Date.now()}`, []);
-  const userId = useMemo(() => 'mobile-user-001', []);
-  
+  const userId = useMemo(() => user?.id || 'guest-user', [user?.id]);
+
   // Lấy insets của điện thoại (Tai thỏ, Dynamic Island, viền dưới) để tính toán chuẩn xác
   const insets = useSafeAreaInsets();
 
@@ -106,7 +108,7 @@ export default function ChatbotScreen() {
         style={styles.container}
         // Cách giải quyết 2: Thêm offset để iOS không đẩy quá tay
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
         <LinearGradient
           colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
@@ -132,7 +134,7 @@ export default function ChatbotScreen() {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.greeting}>Xin chào Huy!</Text>
+          <Text style={styles.greeting}>Xin chào {user?.username || user?.email?.split('@')[0] || 'bạn'}!</Text>
           <Text style={styles.hero}>Chúng ta nên bắt đầu từ đâu nhỉ?</Text>
 
           {messages.length === 0 ? (
@@ -158,7 +160,7 @@ export default function ChatbotScreen() {
 
         {/* Khung chat composer giờ sẽ được đẩy lên một cách an toàn */}
         <ChatComposer value={input} onChangeText={setInput} onSend={() => sendMessage()} loading={loading} />
-        
+
         {/* Cách giải quyết 4: Đệm thêm không gian cho phần bottom (thanh home bar của iPhone) nếu chưa mở bàn phím */}
         {Platform.OS === 'ios' && <View style={{ height: insets.bottom }} />}
       </KeyboardAvoidingView>

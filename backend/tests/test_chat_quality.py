@@ -9,9 +9,10 @@ from app.core.config import settings
 from app.core.orchestrator import FitnessChatOrchestrator
 from app.core.profile_extractor import extract_profile_patch_from_message
 from app.core.text_utils import normalize_text
-from app.db.database import drop_schema, init_db
+from app.db.database import get_connection, init_db
 from app.llm.factory import build_llm_backend
 from app.llm.gemma_local_runtime import LocalGemmaInferencer
+from app.llm.mock_gemma import MockGemmaInferencer
 from app.schemas.chat_request import ChatRequest
 from app.schemas.user_profile import UserProfilePatch
 
@@ -49,7 +50,11 @@ class ChatQualityTestCase(unittest.TestCase):
         self.orchestrator = FitnessChatOrchestrator()
 
     def tearDown(self) -> None:
-        drop_schema(self.database_schema)
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM nutrition_clarifications")
+                cursor.execute("DELETE FROM chat_turns")
+                cursor.execute("DELETE FROM user_profiles")
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_macro_response_is_grounded(self) -> None:
@@ -114,7 +119,7 @@ class ChatQualityTestCase(unittest.TestCase):
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_workout_plan")
         self.assertEqual(response.missing_fields, [])
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("workout_plan", response.tool_results)
         self.assertIn("upper/lower", normalized_reply)
 
     def test_nutrition_precise_request_returns_deterministic_result(self) -> None:
@@ -176,7 +181,7 @@ class ChatQualityTestCase(unittest.TestCase):
             )
         )
         self.assertEqual(response.intent, "request_workout_plan")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("workout_plan", response.tool_results)
 
     def test_nutrition_partial_unmatched_still_returns_matched_totals(self) -> None:
         response = self.orchestrator.handle_chat(
@@ -224,7 +229,8 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_meal_guidance")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("meal_plan", response.tool_results)
+        self.assertIn("macros", response.tool_results)
         self.assertIn("bua sang", normalized_reply)
         self.assertIn("tiet kiem", normalized_reply)
         self.assertIn("trung", normalized_reply)
@@ -250,7 +256,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_meal_guidance")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("meal_plan", response.tool_results)
         self.assertIn("dau hu", normalized_reply)
         self.assertTrue("sua dau nanh" in normalized_reply or "protein thuc vat" in normalized_reply)
 
@@ -274,7 +280,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_meal_guidance")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("meal_plan", response.tool_results)
         self.assertIn("bua sang", normalized_reply)
         self.assertIn("bua trua", normalized_reply)
         self.assertIn("bua phu", normalized_reply)
@@ -303,7 +309,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = response.reply.lower()
         self.assertEqual(response.intent, "request_meal_guidance")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("meal_plan", response.tool_results)
         self.assertNotIn("Ä‘áº§u gá»‘i", normalized_reply)
         self.assertNotIn("rom", normalized_reply)
         self.assertNotIn("leg press", normalized_reply)
@@ -325,7 +331,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_workout_plan")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("workout_plan", response.tool_results)
         self.assertIn("upper/lower", normalized_reply)
         self.assertIn("buoi 1", normalized_reply)
 
@@ -458,7 +464,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = normalize_text(response.reply)
         self.assertEqual(response.intent, "request_workout_plan")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("workout_plan", response.tool_results)
         self.assertIn("beginner", normalized_reply)
         self.assertIn("dau goi", normalized_reply)
 
@@ -480,7 +486,7 @@ class ChatQualityTestCase(unittest.TestCase):
         )
         normalized_reply = response.reply.lower()
         self.assertEqual(response.intent, "request_workout_plan")
-        self.assertEqual(response.tool_results, {})
+        self.assertIn("workout_plan", response.tool_results)
         self.assertNotIn("bá»¯a sÃ¡ng", normalized_reply)
         self.assertNotIn("Ä‘áº­u hÅ©", normalized_reply)
         self.assertNotIn("sá»¯a Ä‘áº­u nÃ nh", normalized_reply)
@@ -542,6 +548,28 @@ class ChatQualityTestCase(unittest.TestCase):
         self.assertNotIn("thuc don", normalized_reply)
 
 
+class MockGemmaRoutingContractTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        self.backend = MockGemmaInferencer()
+
+    def test_llm_route_wins_over_keyword_collisions_in_general_mode(self) -> None:
+        reply = self.backend.generate(
+            {
+                "intent": "general_fitness_qa",
+                "domain_scope": "fitness",
+                "message": "tap chan dau goi thi nen an gi va het bao nhieu tien 1 ngay?",
+                "profile_data": {"budget_level": "low"},
+                "tool_results": {},
+                "kb_context": [],
+                "llm_route": {"mode": "general_cost_coaching"},
+            }
+        )
+        normalized = normalize_text(reply)
+        self.assertIn("chi phi", normalized)
+        self.assertNotIn("bua sang", normalized)
+        self.assertNotIn("split", normalized)
+
+
 class LocalGemmaGuardrailTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.backend = LocalGemmaInferencer(
@@ -592,7 +620,20 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
                     "protein_g": 144,
                     "fat_g": 72,
                     "carb_g": 415,
-                }
+                },
+                "meal_plan": {
+                    "target_calories": 2883,
+                    "protein_g": 144,
+                    "fat_g": 72,
+                    "carb_g": 415,
+                    "meals": [
+                        {"name": "Bua sang", "calories": 721, "protein_g": 36, "carb_g": 104, "fat_g": 18, "example": "yen mach + sua chua + chuoi"},
+                        {"name": "Bua trua", "calories": 865, "protein_g": 43, "carb_g": 124, "fat_g": 22, "example": "com + uc ga + rau"},
+                        {"name": "Bua phu", "calories": 433, "protein_g": 22, "carb_g": 62, "fat_g": 11, "example": "banh mi nguyen cam + trung"},
+                        {"name": "Bua toi", "calories": 864, "protein_g": 43, "carb_g": 125, "fat_g": 21, "example": "com + bo nac + rau"},
+                    ],
+                    "notes": [],
+                },
             },
         }
         grounded = self.backend._ground_response(
@@ -605,11 +646,14 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         prompt = {
             "intent": "general_fitness_qa",
             "message": "Äƒn nhÆ° váº­y thÃ¬ háº¿t bao nhiÃªu tiá»n 1 ngÃ y",
+            "domain_scope": "fitness",
             "profile_data": {},
             "tool_results": {},
         }
         grounded = self.backend._ground_response("```<turn|>", prompt)
-        self.assertIn("chi phi", normalize_text(grounded))
+        normalized = normalize_text(grounded)
+        self.assertIn("ve cau hoi", normalized)
+        self.assertNotIn("turn|", normalized)
 
     def test_workout_guardrail_rejects_internal_meta(self) -> None:
         prompt = {
@@ -699,6 +743,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         prompt = {
             "intent": "general_fitness_qa",
             "message": "cÃ¡ch táº¡o tÃ i khoáº£n ngÃ¢n hÃ ng",
+            "domain_scope": "out_of_domain",
             "profile_data": {},
             "tool_results": {},
         }
@@ -716,6 +761,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         prompt = {
             "intent": "general_fitness_qa",
             "message": "cÃ¡ch táº¡o tÃ i khoáº£n ngÃ¢n hÃ ng",
+            "domain_scope": "out_of_domain",
             "profile_data": {},
             "tool_results": {},
         }
@@ -785,7 +831,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
             prompt,
         )
         normalized = normalize_text(grounded)
-        self.assertTrue("protein" in normalized or "bua" in normalized)
+        self.assertTrue("bua" in normalized or "recovery" in normalized or "tap xong" in normalized)
         self.assertNotIn("user_context_final", normalized)
         self.assertNotIn("profile_final", normalized)
 
@@ -811,6 +857,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         prompt = {
             "intent": "general_fitness_qa",
             "message": "cach tao tai khoan ngan hang",
+            "domain_scope": "out_of_domain",
             "profile_data": {},
             "tool_results": {},
         }
@@ -843,6 +890,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         prompt = {
             "intent": "general_fitness_qa",
             "message": "toi muon mua dien thoai nen lam gi",
+            "domain_scope": "out_of_domain",
             "profile_data": {},
             "tool_results": {},
         }
@@ -879,6 +927,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
             {
                 "intent": "general_fitness_qa",
                 "message": "cach tao tai khoan ngan hang",
+                "domain_scope": "out_of_domain",
                 "profile_summary": "Tuá»•i: 28; Chiá»u cao: 178 cm",
                 "personalization_summary": "Æ¯u tiÃªn tráº£ lá»i ngáº¯n gá»n",
                 "history": [],
@@ -894,6 +943,32 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         self.assertNotIn("intent:", normalized)
         self.assertNotIn("profile:", normalized)
         self.assertNotIn("day la du lieu", normalized)
+        self.assertNotIn("tuoi", normalized)
+
+    def test_general_user_prompt_obeys_orchestrator_route_flags(self) -> None:
+        prompt_text = self.backend._build_user_prompt(
+            {
+                "intent": "general_fitness_qa",
+                "message": "toi muon mua dien thoai nen lam gi",
+                "domain_scope": "fitness",
+                "profile_summary": "Tuoi: 28; Chieu cao: 178 cm",
+                "history": [{"user_message": "cuoc hoi truoc", "assistant_message": "phan hoi truoc"}],
+                "kb_context": [{"title": "Workout", "content": "Tang dan muc kho theo thoi gian."}],
+                "tool_results": {},
+                "llm_route": {
+                    "mode": "general_out_of_domain",
+                    "prompt_style": "general_minimal",
+                    "include_profile_context": False,
+                    "include_history_context": False,
+                    "include_kb_context": False,
+                },
+            }
+        )
+        normalized = normalize_text(prompt_text)
+        self.assertIn("mua dien thoai", normalized)
+        self.assertNotIn("tuoi", normalized)
+        self.assertNotIn("cuoc hoi truoc", normalized)
+        self.assertNotIn("tang dan muc kho", normalized)
 
     def test_general_system_prompt_discourages_template_completion(self) -> None:
         prompt_text = self.backend._build_system_prompt(
@@ -905,6 +980,7 @@ class LocalGemmaGuardrailTestCase(unittest.TestCase):
         normalized = normalize_text(prompt_text)
         self.assertIn("khong dien tiep mau prompt", normalized)
         self.assertIn("khong lap lai", normalized)
+        self.assertNotIn("tool_results", normalized)
 
     def test_nutrition_fallback_prompt_is_minimal(self) -> None:
         prompt_text = self.backend._build_user_prompt(

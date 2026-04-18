@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.db.database import get_connection
+from app.db.database import get_connection, normalize_user_id
 
 
 class NutritionClarificationStore:
@@ -36,6 +36,7 @@ class NutritionClarificationStore:
         original_message: str,
         payload: dict[str, object],
     ) -> None:
+        user_id = normalize_user_id(user_id)
         encoded_payload = json.dumps(payload, ensure_ascii=False)
         with get_connection() as connection:
             with connection.cursor() as cursor:

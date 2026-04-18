@@ -7,6 +7,15 @@ import psycopg2.extras
 
 from app.core.config import settings
 
+import uuid
+import hashlib
+
+def normalize_user_id(user_id: str) -> str:
+    try:
+        return str(uuid.UUID(user_id))
+    except ValueError:
+        return str(uuid.UUID(hashlib.md5(user_id.encode("utf-8")).hexdigest()))
+
 
 @contextmanager
 def get_connection():
@@ -30,7 +39,7 @@ def init_db() -> None:
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_profiles (
-                    id TEXT PRIMARY KEY,
+                    id UUID PRIMARY KEY,
                     email TEXT NOT NULL UNIQUE,
                     username TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
@@ -65,7 +74,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS chat_turns (
                     id BIGSERIAL PRIMARY KEY,
                     session_id TEXT NOT NULL,
-                    user_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+                    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
                     user_message TEXT NOT NULL,
                     assistant_message TEXT NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -82,7 +91,7 @@ def init_db() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS nutrition_clarifications (
                     session_id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+                    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
                     original_message TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
