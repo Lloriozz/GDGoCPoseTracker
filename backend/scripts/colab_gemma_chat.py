@@ -85,7 +85,7 @@ def _set_setting_if_present(settings: Any, name: str, value: Any) -> None:
 
 def configure_colab_runtime(
     *,
-    llm_backend: str = "local-transformers",
+    llm_backend: str = "gemma_local",
     model_id: str | None = None,
     device: str | None = None,
     dtype: str | None = None,

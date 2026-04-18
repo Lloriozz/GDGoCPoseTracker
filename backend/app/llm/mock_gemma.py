@@ -15,7 +15,7 @@ class MockGemmaInferencer(BaseLLMBackend):
         tool_results = prompt.get("tool_results", {})
         profile_data = prompt.get("profile_data", {})
         kb_context = prompt.get("kb_context", [])
-        message = str(prompt.get("message", ""))
+        message = repair_mojibake(str(prompt.get("message", "")))
         nutrition_fallback_items = prompt.get("nutrition_fallback_items", [])
 
         if route_mode == "nutrition_fallback" and isinstance(nutrition_fallback_items, list):
@@ -45,7 +45,7 @@ class MockGemmaInferencer(BaseLLMBackend):
                     "Đây là khung rất tốt để đi tiếp sang meal plan."
                 )
 
-        if route_mode == "general_out_of_domain":
+        if route_mode == "general_out_of_domain" and intent != "general_fitness_qa":
             return self._build_general_reply(message)
 
         if intent == "general_fitness_qa":
@@ -607,20 +607,21 @@ class MockGemmaInferencer(BaseLLMBackend):
         response_mode: str,
     ) -> str:
         normalized_message = robust_normalize_text(message)
+        inferred_mode = self._infer_general_response_mode(normalized_message)
 
-        if response_mode == "general_cost_coaching":
+        if response_mode == "general_cost_coaching" or inferred_mode == "general_cost_coaching":
             return self._build_cost_reply(profile_data)
 
-        if response_mode == "general_meal_coaching":
+        if response_mode == "general_meal_coaching" or inferred_mode == "general_meal_coaching":
             return self._build_general_meal_reply(profile_data, kb_context, normalized_message)
 
-        if response_mode == "general_workout_coaching":
+        if response_mode == "general_workout_coaching" or inferred_mode == "general_workout_coaching":
             return self._build_general_workout_reply(profile_data, kb_context, normalized_message)
 
-        if response_mode == "general_goal_coaching":
+        if response_mode == "general_goal_coaching" or inferred_mode == "general_goal_coaching":
             return self._build_general_goal_reply(kb_context)
 
-        if response_mode == "general_recovery_coaching":
+        if response_mode == "general_recovery_coaching" or inferred_mode == "general_recovery_coaching":
             return self._build_general_recovery_reply(kb_context)
 
         if response_mode == "general_grounded_answer" and isinstance(kb_context, list) and kb_context:
@@ -628,19 +629,85 @@ class MockGemmaInferencer(BaseLLMBackend):
 
         return self._build_general_reply(message)
 
+    def _infer_general_response_mode(self, normalized_message: str) -> str:
+        if not normalized_message:
+            return ""
+
+        if any(marker in normalized_message for marker in ["bao nhieu tien", "chi phi", "ngan sach"]):
+            return "general_cost_coaching"
+
+        if any(
+            marker in normalized_message
+            for marker in [
+                "tap gym",
+                "lich tap",
+                "buoi tap",
+                "split",
+                "workout",
+                "dau goi",
+                "co nen tap",
+                "tap sao",
+            ]
+        ):
+            return "general_workout_coaching"
+
+        if any(
+            marker in normalized_message
+            for marker in [
+                "an gi",
+                "bua an",
+                "thuc don",
+                "protein",
+                "calo",
+                "meal",
+                "macro",
+                "sau tap",
+                "tap xong an",
+            ]
+        ):
+            return "general_meal_coaching"
+
+        if any(
+            marker in normalized_message
+            for marker in [
+                "giam can",
+                "giam mo",
+                "tang co",
+                "lean bulk",
+                "recomp",
+                "muc tieu",
+            ]
+        ):
+            return "general_goal_coaching"
+
+        if any(
+            marker in normalized_message
+            for marker in [
+                "hoi phuc",
+                "dien giai",
+                "bu nuoc",
+                "mat nuoc",
+                "do mo hoi",
+                "chuot rut",
+            ]
+        ):
+            return "general_recovery_coaching"
+
+        return ""
+
     def _build_general_goal_reply(self, kb_context: object) -> str:
         kb_note = self._build_kb_note(kb_context)
         reply = (
-            "De giam can ben vung, ban nen giu tham hut calo vua phai, uu tien protein on dinh, "
-            "an cac bua de bam lau va tap deu trong vai tuan de theo doi tien do."
+            "Để giảm cân bền vững, bạn nên giữ thâm hụt calo vừa phải, ưu tiên protein ổn định, "
+            "ăn các bữa dễ bám lâu và tập đều trong vài tuần để theo dõi tiến độ."
         )
         return f"{reply} {kb_note}".strip() if kb_note else reply
 
     def _build_general_recovery_reply(self, kb_context: object) -> str:
         kb_note = self._build_kb_note(kb_context)
         reply = (
-            "Dien giai quan trong hon khi ban do mo hoi nhieu, tap lau hoac tap trong moi truong nong. "
-            "Neu buoi tap nhe va ban an uong binh thuong, uu tien bu nuoc va an lai mot bua hop ly la du."
+            "Điện giải quan trọng hơn khi bạn đổ mồ hôi nhiều, tập lâu hoặc tập trong môi trường nóng. "
+            "Nếu buổi tập nhẹ và bạn ăn uống bình thường, ưu tiên bù nước và ăn lại một bữa hợp lý là đủ."
         )
         return f"{reply} {kb_note}".strip() if kb_note else reply
 
@@ -648,12 +715,11 @@ class MockGemmaInferencer(BaseLLMBackend):
         cleaned_message = " ".join(repair_mojibake(message).strip().split())
         if cleaned_message:
             return (
-                f"Voi cau hoi \"{cleaned_message}\", minh goi y ban bat dau tu buoc co ban nhat truoc, "
-                "sau do doi chieu them voi huong dan chinh thuc neu can. "
-                "Neu ban muon, minh co the giup ban tach tiep thanh cac buoc ngan gon hon."
+                "Bạn có thể bắt đầu từ phương án đơn giản và an toàn nhất trước, rồi tăng dần khi cơ thể quen hơn. "
+                f"Nếu muốn, mình có thể tách câu hỏi \"{cleaned_message}\" thành vài bước rất cụ thể để bạn làm ngay."
             )
         return (
-            "Minh co the giup ban tra loi ngan gon va thuc te hon neu ban noi ro hon dieu ban muon hoi."
+            "Mình có thể trả lời ngắn gọn và thực tế hơn nếu bạn nói rõ hơn điều bạn muốn hỏi."
         )
 
     def _build_general_meal_reply(
@@ -674,37 +740,37 @@ class MockGemmaInferencer(BaseLLMBackend):
 
         if any(marker in normalized_message for marker in ["sau tap", "tap xong", "moi tap xong"]):
             base = (
-                "Sau tap, ban nen uu tien mot bua co protein ro rang kem carb de hoi phuc tot hon, "
-                "vi du com + uc ga, bun + trung, hoac sua chua + chuoi neu can gon nhe."
+                "Sau tập, bạn nên ưu tiên một bữa có protein rõ ràng kèm carb để hồi phục tốt hơn, "
+                "ví dụ cơm + ức gà, bún + trứng, hoặc sữa chua + chuối nếu cần gọn nhẹ."
             )
         elif any(marker in normalized_message for marker in ["giam can", "giam mo", "fat loss"]):
             base = (
-                "Neu dang giam can, ban nen uu tien bua co protein ro rang, rau de no lau, "
-                "va giu phan carb vua du, vi du uc ga + rau + com it hon, trung + salad + khoai, hoac dau hu + rau + com."
+                "Nếu đang giảm cân, bạn nên ưu tiên bữa có protein rõ ràng, rau để no lâu, "
+                "và giữ phần carb vừa đủ, ví dụ ức gà + rau + ít cơm, trứng + salad + khoai, hoặc đậu hũ + rau + cơm."
             )
         elif any(marker in normalized_message for marker in ["tang co", "muscle gain"]):
             base = (
-                "Neu uu tien tang co, hay giu moi bua co protein ro rang kem carb de hoi phuc va tap tot hon, "
-                "vi du com + uc ga, bun + bo nac, pho ga it mo, hoac sua chua + chuoi + yen mach."
+                "Nếu ưu tiên tăng cơ, hãy giữ mỗi bữa có protein rõ ràng kèm carb để hồi phục và tập tốt hơn, "
+                "ví dụ cơm + ức gà, bún + bò nạc, phở gà ít mỡ, hoặc sữa chua + chuối + yến mạch."
             )
         elif {"vegetarian", "an chay", "vegan"} & normalized_preferences:
             base = (
-                "Neu ban an chay, hay uu tien dau hu, edamame, sua dau nanh, sua chua thuc vat va cac bua com hoac bun co them rau "
-                "de giu du protein ma van de bam hang ngay."
+                "Nếu bạn ăn chay, hãy ưu tiên đậu hũ, edamame, sữa đậu nành, sữa chua thực vật và các bữa cơm hoặc bún có thêm rau "
+                "để giữ đủ protein mà vẫn dễ bám hằng ngày."
             )
         elif "tiet kiem" in normalized_message and "protein" in normalized_message:
             base = (
-                "Neu muon tiet kiem ma van du protein, ban co the uu tien trung, dau hu, uc ga, ca hop, "
-                "sua chua va com hoac khoai de de xoay tua hang ngay."
+                "Nếu muốn tiết kiệm mà vẫn đủ protein, bạn có thể ưu tiên trứng, đậu hũ, ức gà, cá hộp, "
+                "sữa chua và cơm hoặc khoai để dễ xoay tua hằng ngày."
             )
         else:
             base = (
-                "Ban co the di theo huong moi bua co protein ro rang, them rau, va chon carb vua du theo muc tieu. "
-                "Cac mon de bam nhat thuong la com + thit nac, bun + trung, pho ga it mo, hoac dau hu + com + rau."
+                "Bạn có thể đi theo hướng mỗi bữa có protein rõ ràng, thêm rau, và chọn lượng carb vừa đủ theo mục tiêu. "
+                "Các món dễ bám nhất thường là cơm + thịt nạc, bún + trứng, phở gà ít mỡ, hoặc đậu hũ + cơm + rau."
             )
 
         if {"milk", "sua", "dairy", "lactose"} & normalized_allergies:
-            base += " Neu khong hop sua, co the doi sang sua dau nanh khong duong hoac protein thuc vat."
+            base += " Nếu không hợp sữa, có thể đổi sang sữa đậu nành không đường hoặc protein thực vật."
 
         kb_note = self._build_kb_note(kb_context)
         return f"{base} {kb_note}".strip() if kb_note else base
@@ -720,22 +786,22 @@ class MockGemmaInferencer(BaseLLMBackend):
 
         if "dau goi" in normalized_message:
             base = (
-                "Neu dau goi nhay cam, uu tien cac bai kiem soat ROM, tang tai tu tu, "
-                "va tranh nhoi squat hoac lunge qua cao khi dang bi kich ung."
+                "Nếu đầu gối nhạy cảm, hãy ưu tiên các bài kiểm soát ROM, tăng tải từ từ, "
+                "và tránh nhồi squat hoặc lunge quá cao khi đang bị kích ứng."
             )
         elif "co nen tap gym" in normalized_message or "tap gym khong" in normalized_message:
             base = (
-                "Neu suc khoe hien tai on va ban muon cai thien the luc, tap gym la mot lua chon rat on "
-                "mien la ban bat dau voi muc vua phai, hoc ky thuat tu tu, va duy tri deu."
+                "Nếu sức khỏe hiện tại ổn và bạn muốn cải thiện thể lực, tập gym là một lựa chọn rất ổn "
+                "miễn là bạn bắt đầu với mức vừa phải, học kỹ thuật từ từ, và duy trì đều."
             )
         elif profile_data.get("workout_days_per_week") == 4 or "4 buoi" in normalized_message:
             base = (
-                "Neu ban tap 4 buoi moi tuan, split upper/lower thuong la mot diem bat dau rat de bam "
-                "vi vua de lap lai, vua de theo doi tien do."
+                "Nếu bạn tập 4 buổi mỗi tuần, split upper/lower thường là một điểm bắt đầu rất dễ bám "
+                "vì vừa dễ lặp lại, vừa dễ theo dõi tiến độ."
             )
         else:
             base = (
-                "Ban nen bat dau voi mot lich de bam, uu tien ky thuat on va tang tai tu tu thay vi doi hoi lich qua phuc tap ngay tu dau."
+                "Bạn nên bắt đầu với một lịch dễ bám, ưu tiên kỹ thuật ổn và tăng tải từ từ thay vì đòi hỏi lịch quá phức tạp ngay từ đầu."
             )
 
         kb_note = self._build_workout_kb_note(kb_context)
@@ -743,27 +809,27 @@ class MockGemmaInferencer(BaseLLMBackend):
 
     def _build_nutrition_fallback_reply(self, items: list[object]) -> str:
         lines = [
-            "Cac muc duoi day chua co trong nutrition catalog, nen minh chi uoc luong o muc low-confidence:"
+            "Các mục dưới đây chưa có trong nutrition catalog, nên mình chỉ ước lượng ở mức low-confidence:"
         ]
         for item in items:
             raw_item = str(item).strip()
             normalized_item = robust_normalize_text(raw_item)
             if "rong bien" in normalized_item:
                 lines.append(
-                    f"- `{raw_item}`: neu la rong bien an kem hoac rong bien kho thong thuong thi calories thuong khong cao, "
-                    "nhung neu la loai say gion, tam vi hoac co them dau/duong thi so co the chenh kha nhieu."
+                    f"- `{raw_item}`: nếu là rong biển ăn kèm hoặc rong biển khô thông thường thì calories thường không cao, "
+                    "nhưng nếu là loại sấy giòn, tẩm vị hoặc có thêm dầu/đường thì số có thể chênh khá nhiều."
                 )
             elif "pho" in normalized_item:
                 lines.append(
-                    f"- `{raw_item}`: neu la mot to pho pho bien thi thuong nam trong khoang 450-700 kcal, "
-                    "nhung con so nay phu thuoc kha manh vao luong banh pho, thit va mo nuoc dung."
+                    f"- `{raw_item}`: nếu là một tô phở phổ biến thì thường nằm trong khoảng 450-700 kcal, "
+                    "nhưng con số này phụ thuộc khá mạnh vào lượng bánh phở, thịt và mỡ nước dùng."
                 )
             else:
                 lines.append(
-                    f"- `{raw_item}`: minh chua co du lieu chuan cho muc nay, nen tam thoi chi co the dua ra uoc luong tho va khong nen xem nhu con so chinh xac."
+                    f"- `{raw_item}`: mình chưa có dữ liệu chuẩn cho mục này, nên tạm thời chỉ có thể đưa ra ước lượng thô và không nên xem như con số chính xác."
                 )
 
         lines.append(
-            "Neu ban muon tinh sat hon, hay nhap ten cu the hon hoac tach thanh nguyen lieu chinh kem khoi luong theo gram."
+            "Nếu bạn muốn tính sát hơn, hãy nhập tên cụ thể hơn hoặc tách thành nguyên liệu chính kèm khối lượng theo gram."
         )
         return "\n".join(lines)

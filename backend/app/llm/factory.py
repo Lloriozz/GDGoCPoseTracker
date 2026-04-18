@@ -13,7 +13,7 @@ def build_llm_backend() -> BaseLLMBackend:
     if backend in {"mock", "mock-gemma"}:
         return MockGemmaInferencer()
 
-    if backend in {"local", "local-gemma", "local-transformers"}:
+    if backend in {"local", "local-gemma", "local-transformers", "gemma_local", "gemma-local"}:
         return LocalGemmaInferencer(
             model_id=settings.gemma_model_id,
             device=settings.gemma_device,

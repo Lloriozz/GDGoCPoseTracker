@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import difflib
 import gc
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +82,7 @@ PROMPT_LEAK_MARKERS = (
 )
 CUDA_DEVICE_MODES = {"cuda", "auto"}
 QUANTIZED_MODES = {"4bit", "8bit"}
+TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
 
 class LocalGemmaInferencer(BaseLLMBackend):
@@ -202,7 +205,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
             raise RuntimeError(
                 "Local Gemma backend requires a Transformers build that includes Gemma 4 support, "
                 "along with `torch`. Install a newer/main Transformers build before using "
-                "`LLM_BACKEND=local-transformers`."
+                "`LLM_BACKEND=gemma_local` (alias: `local-transformers`)."
             ) from exc
 
         return {
@@ -343,7 +346,9 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _apply_auto_device_map(self, model_kwargs: dict[str, Any]) -> None:
         model_kwargs["device_map"] = "auto"
-        model_kwargs["max_memory"] = self._build_max_memory()
+        max_memory = self._build_max_memory()
+        if max_memory:
+            model_kwargs["max_memory"] = max_memory
         if self.offload_buffers:
             model_kwargs["offload_buffers"] = True
 
@@ -357,13 +362,17 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _build_max_memory(self) -> dict[Any, str]:
         if self.device_mode not in CUDA_DEVICE_MODES:
-            return {"cpu": f"{self.cpu_memory_limit_mb}MiB"}
+            if self.cpu_memory_limit_mb > 0:
+                return {"cpu": f"{self.cpu_memory_limit_mb}MiB"}
+            return {}
 
         gpu_index: Any = 0
-        return {
-            gpu_index: f"{self.gpu_memory_limit_mb}MiB",
-            "cpu": f"{self.cpu_memory_limit_mb}MiB",
-        }
+        max_memory: dict[Any, str] = {}
+        if self.gpu_memory_limit_mb > 0:
+            max_memory[gpu_index] = f"{self.gpu_memory_limit_mb}MiB"
+        if self.cpu_memory_limit_mb > 0:
+            max_memory["cpu"] = f"{self.cpu_memory_limit_mb}MiB"
+        return max_memory
 
     def _validate_runtime(self, torch: Any) -> None:
         if self.device_mode == "cuda" and not torch.cuda.is_available():
@@ -994,37 +1003,134 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _render_general_fallback(self, prompt: dict[str, object]) -> str:
         message = str(prompt.get("message", "")).strip()
+        route = self._resolve_llm_route(prompt)
+        route_mode = str(route.get("mode", "")).strip()
         domain_scope = str(prompt.get("domain_scope", "fitness")).strip()
         kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=2)
         if not message:
             if kb_note:
                 return kb_note
-            return "Minh co the tra loi ngan gon va thuc te hon neu ban noi ro hon muc tieu hoac dieu ban muon hoi."
+            return "Mình có thể trả lời ngắn gọn và thực tế hơn nếu bạn nói rõ hơn mục tiêu hoặc điều bạn muốn hỏi."
 
+        if route_mode == "general_workout_coaching":
+            return self._render_general_workout_fallback(prompt)
+        if route_mode == "general_meal_coaching":
+            return self._render_general_meal_fallback(prompt)
+        if route_mode == "general_goal_coaching":
+            return self._render_general_goal_fallback(prompt)
+        if route_mode == "general_recovery_coaching":
+            return self._render_general_recovery_fallback(prompt)
+        if route_mode == "general_cost_coaching":
+            return self._render_general_cost_fallback(prompt)
         if domain_scope != "out_of_domain" and kb_note:
             reply = (
-                f'Ve cau hoi "{message}", minh tom tat nhanh y lien quan nhat de ban de ap dung hon.'
+                f'Về câu hỏi "{message}", mình tóm tắt nhanh ý liên quan nhất để bạn dễ áp dụng hơn.'
             )
             return f"{reply} {kb_note}"
         if domain_scope == "out_of_domain":
             return (
-                f'Ve cau hoi "{message}", minh goi y ban bat dau tu buoc co ban nhat truoc '
-                "roi doi chieu them voi huong dan chinh thuc neu can. "
-                "Neu ban muon, minh co the giup ban tach tiep thanh cac buoc ngan gon hon."
+                f'Về câu hỏi "{message}", mình gợi ý bạn bắt đầu từ bước cơ bản nhất trước '
+                "rồi đối chiếu thêm với hướng dẫn chính thức nếu cần. "
+                "Nếu bạn muốn, mình có thể giúp bạn tách tiếp thành các bước ngắn gọn hơn."
             )
         return (
-            f'Ve cau hoi "{message}", minh goi y ban bat dau tu mot buoc don gian va dieu chinh theo muc tieu hien tai. '
-            "Neu ban muon, minh co the di sau hon theo huong bua an, workout hoac recovery cu the hon."
+            f'Về câu hỏi "{message}", mình gợi ý bạn bắt đầu từ một bước đơn giản và điều chỉnh theo mục tiêu hiện tại. '
+            "Nếu bạn muốn, mình có thể đi sâu hơn theo hướng bữa ăn, workout hoặc recovery cụ thể hơn."
         )
+
+    def _render_general_workout_fallback(self, prompt: dict[str, object]) -> str:
+        message = str(prompt.get("message", "")).strip()
+        normalized_message = normalize_text(message)
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=1)
+
+        if "dau goi" in normalized_message:
+            reply = (
+                "Nếu đầu gối đang nhạy cảm, bạn vẫn có thể tập nhưng nên ưu tiên bài dễ kiểm soát ROM, "
+                "tăng tải từ từ và tránh nhồi squat hoặc lunge quá mạnh khi đang kích ứng."
+            )
+        elif any(marker in normalized_message for marker in ["co nen tap gym", "nen tap gym", "tap gym khong"]):
+            reply = (
+                "Nếu sức khỏe hiện tại ổn và bạn muốn cải thiện thể lực, tập gym là một lựa chọn tốt. "
+                "Bạn nên bắt đầu nhẹ, học kỹ thuật trước, và tăng độ khó dần thay vì lao vào lịch quá nặng ngay từ đầu."
+            )
+        elif "4 buoi" in normalized_message:
+            reply = (
+                "Nếu bạn tập 4 buổi mỗi tuần, split upper/lower thường là điểm bắt đầu dễ bám và dễ theo dõi tiến độ."
+            )
+        else:
+            reply = (
+                "Bạn nên bắt đầu với một lịch dễ bám, ưu tiên kỹ thuật ổn và tăng tải từ từ thay vì đòi hỏi lịch quá phức tạp ngay từ đầu."
+            )
+
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
+    def _render_general_meal_fallback(self, prompt: dict[str, object]) -> str:
+        message = str(prompt.get("message", "")).strip()
+        normalized_message = normalize_text(message)
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=1)
+
+        if any(marker in normalized_message for marker in ["sau tap", "tap xong", "moi tap xong"]):
+            reply = (
+                "Sau tập, bạn nên ưu tiên một bữa có protein rõ ràng kèm carb để hồi phục tốt hơn, "
+                "ví dụ cơm + ức gà, bún + trứng, hoặc sữa chua + chuối nếu cần gọn nhẹ."
+            )
+        elif any(marker in normalized_message for marker in ["giam can", "giam mo", "fat loss"]):
+            reply = (
+                "Nếu đang giảm cân, bạn nên ưu tiên bữa có protein rõ ràng, rau để no lâu và giữ phần carb vừa đủ để dễ bám lâu dài."
+            )
+        else:
+            reply = (
+                "Bạn có thể đi theo hướng mỗi bữa có protein rõ ràng, thêm rau, và chọn carb vừa đủ theo mục tiêu hiện tại."
+            )
+
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
+    def _render_general_goal_fallback(self, prompt: dict[str, object]) -> str:
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=1)
+        reply = (
+            "Để giảm cân bền vững, bạn nên giữ thâm hụt calo vừa phải, ưu tiên protein ổn định, "
+            "ăn các bữa dễ bám lâu và tập đều trong vài tuần để theo dõi tiến độ."
+        )
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
+    def _render_general_recovery_fallback(self, prompt: dict[str, object]) -> str:
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=1)
+        reply = (
+            "Điện giải quan trọng hơn khi bạn đổ mồ hôi nhiều, tập lâu hoặc tập trong môi trường nóng. "
+            "Nếu buổi tập nhẹ và bạn ăn uống bình thường, ưu tiên bù nước và ăn lại một bữa hợp lý là đủ."
+        )
+        return f"{reply} {kb_note}".strip() if kb_note else reply
+
+    def _render_general_cost_fallback(self, prompt: dict[str, object]) -> str:
+        profile_data = prompt.get("profile_data", {})
+        if not isinstance(profile_data, dict):
+            profile_data = {}
+
+        budget_level = str(profile_data.get("budget_level", "")).strip().lower()
+        if budget_level == "low":
+            reply = (
+                "Nếu muốn tiết kiệm, bạn có thể ưu tiên trứng, đậu hũ, ức gà, sữa chua và cơm để giữ chi phí hợp lý mà vẫn dễ bám protein."
+            )
+        elif budget_level == "high":
+            reply = (
+                "Nếu ngân sách thoải mái hơn, bạn có thể mở rộng sang bò nạc, cá hồi, sữa chua Hy Lạp và trái cây đa dạng hơn."
+            )
+        else:
+            reply = (
+                "Chi phí mỗi ngày phụ thuộc vào loại thực phẩm, khẩu phần và nơi bạn mua, nhưng vẫn có thể ước tính theo mức tiết kiệm, vừa phải hoặc thoải mái."
+            )
+
+        kb_note = self._summarize_kb_context(prompt.get("kb_context", []), max_items=1)
+        return f"{reply} {kb_note}".strip() if kb_note else reply
 
     def _render_default_fallback(self, prompt: dict[str, object]) -> str:
         message = str(prompt.get("message", "")).strip()
         if message:
             return (
-                f'Voi cau hoi "{message}", minh se uu tien tra loi gon va thuc te nhat theo thong tin hien co. '
-                "Neu ban muon, minh co the di sau hon vao mot muc tieu cu the hon o turn tiep theo."
+                f'Với câu hỏi "{message}", mình sẽ ưu tiên trả lời gọn và thực tế nhất theo thông tin hiện có. '
+                "Nếu bạn muốn, mình có thể đi sâu hơn vào một mục tiêu cụ thể hơn ở lượt tiếp theo."
             )
-        return "Minh can them mot chut thong tin de tra loi sat hon."
+        return "Mình cần thêm một chút thông tin để trả lời sát hơn."
 
     def _is_invalid_grounded_response(
         self,
@@ -1037,6 +1143,8 @@ class LocalGemmaInferencer(BaseLLMBackend):
         if self._contains_generation_noise(text):
             return True
         if self._looks_like_prompt_leak(text, normalized):
+            return True
+        if self._looks_like_repetitive_gibberish(text, normalized):
             return True
 
         if intent == "request_tdee_macro":
@@ -1253,3 +1361,52 @@ class LocalGemmaInferencer(BaseLLMBackend):
             return True
 
         return False
+
+    def _looks_like_repetitive_gibberish(self, text: str, normalized: str) -> bool:
+        tokens = TOKEN_PATTERN.findall(normalized)
+        if len(tokens) >= 8:
+            token_counts = Counter(tokens)
+            top_token_total = sum(count for _, count in token_counts.most_common(4))
+            if len(token_counts) <= 6 and top_token_total / len(tokens) >= 0.72:
+                return True
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 3:
+            return False
+
+        normalized_lines = [
+            self._normalize_generated_line(line)
+            for line in lines
+        ]
+        meaningful_lines = [line for line in normalized_lines if len(TOKEN_PATTERN.findall(line)) >= 2]
+        if len(meaningful_lines) < 3:
+            return False
+
+        condensed_lines = [self._condense_generated_line(line) for line in meaningful_lines]
+        similar_pairs = 0
+        for index, left in enumerate(condensed_lines):
+            for right in condensed_lines[index + 1:]:
+                if self._line_similarity(left, right) >= 0.88:
+                    similar_pairs += 1
+
+        if similar_pairs >= max(2, len(meaningful_lines) - 1):
+            return True
+
+        punctuation_heavy_lines = sum(
+            1 for line in lines if line.endswith((":", ";", "**")) or line.count(":") >= 2
+        )
+        if punctuation_heavy_lines >= 3 and len(set(tokens)) <= 8:
+            return True
+
+        return False
+
+    def _normalize_generated_line(self, line: str) -> str:
+        return normalize_text(line).strip(" .,:;*_`-")
+
+    def _condense_generated_line(self, line: str) -> str:
+        return "".join(char for char in self._normalize_generated_line(line) if char.isalnum())
+
+    def _line_similarity(self, left: str, right: str) -> float:
+        if not left or not right:
+            return 0.0
+        return difflib.SequenceMatcher(None, left, right).ratio()

@@ -25,16 +25,16 @@ class Settings:
     gemma_model_id: str = os.getenv("GEMMA_MODEL_ID", "google/gemma-4-E4B-it")
     gemma_device: str = os.getenv("GEMMA_DEVICE", "cuda")
     gemma_dtype: str = os.getenv("GEMMA_DTYPE", "bfloat16")
-    gemma_quantization: str = os.getenv("GEMMA_QUANTIZATION", "4bit")
+    gemma_quantization: str = os.getenv("GEMMA_QUANTIZATION", "none")
     gemma_max_new_tokens: int = int(os.getenv("GEMMA_MAX_NEW_TOKENS", "512"))
     gemma_temperature: float = float(os.getenv("GEMMA_TEMPERATURE", "0.5"))
     gemma_top_p: float = float(os.getenv("GEMMA_TOP_P", "0.95"))
     gemma_do_sample: bool = _env_bool("GEMMA_DO_SAMPLE", False)
     gemma_trust_remote_code: bool = _env_bool("GEMMA_TRUST_REMOTE_CODE", False)
-    gemma_cpu_offload: bool = _env_bool("GEMMA_CPU_OFFLOAD", True)
-    gemma_offload_buffers: bool = _env_bool("GEMMA_OFFLOAD_BUFFERS", True)
-    gemma_gpu_memory_limit_mb: int = int(os.getenv("GEMMA_GPU_MEMORY_LIMIT_MB", "11000"))
-    gemma_cpu_memory_limit_mb: int = int(os.getenv("GEMMA_CPU_MEMORY_LIMIT_MB", "16384"))
+    gemma_cpu_offload: bool = _env_bool("GEMMA_CPU_OFFLOAD", False)
+    gemma_offload_buffers: bool = _env_bool("GEMMA_OFFLOAD_BUFFERS", False)
+    gemma_gpu_memory_limit_mb: int = int(os.getenv("GEMMA_GPU_MEMORY_LIMIT_MB", "0"))
+    gemma_cpu_memory_limit_mb: int = int(os.getenv("GEMMA_CPU_MEMORY_LIMIT_MB", "0"))
     database_url: str = os.getenv(
         "DATABASE_URL",
         "postgresql://postgres.xcjneatqfqacflbdrgxz:Duy180505!!..@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres",

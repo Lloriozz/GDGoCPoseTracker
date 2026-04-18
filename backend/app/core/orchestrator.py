@@ -1,6 +1,6 @@
 from app.core.config import settings
 from app.core.profile_extractor import extract_profile_patch_from_message, merge_profile_patches
-from app.core.robust_text_utils import robust_normalize_text
+from app.core.robust_text_utils import repair_mojibake, robust_normalize_text
 from app.core.safety import SafetyChecker
 from app.llm.factory import build_llm_backend
 from app.memory.chat_history import ChatHistoryStore
@@ -64,7 +64,9 @@ class FitnessChatOrchestrator:
 
         missing_fields = self._collect_missing_fields(intent, profile)
         if missing_fields:
-            reply = self.llm.generate_followup_question(intent=intent, missing_fields=missing_fields)
+            reply = repair_mojibake(
+                self.llm.generate_followup_question(intent=intent, missing_fields=missing_fields)
+            )
             self.chat_history.append_turn(
                 request.session_id,
                 request.user_id,
@@ -107,7 +109,7 @@ class FitnessChatOrchestrator:
             "tool_results": tool_results,
             "kb_context": kb_context,
         }
-        reply = self.llm.generate(prompt)
+        reply = repair_mojibake(self.llm.generate(prompt))
 
         self.chat_history.append_turn(
             request.session_id,
@@ -943,7 +945,7 @@ class FitnessChatOrchestrator:
             "nutrition_known_totals": estimate.get("totals", {}),
         }
         try:
-            reply = self.llm.generate(fallback_prompt).strip()
+            reply = repair_mojibake(self.llm.generate(fallback_prompt)).strip()
         except Exception:
             return ""
         return reply if self._looks_useful_nutrition_fallback(reply) else ""

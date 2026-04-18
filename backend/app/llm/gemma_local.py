@@ -187,7 +187,7 @@ class LocalGemmaInferencer(BaseLLMBackend):
             raise RuntimeError(
                 "Local Gemma backend requires a Transformers build that includes Gemma 4 support, "
                 "along with `torch`. Install a newer/main Transformers build before using "
-                "`LLM_BACKEND=local-transformers`."
+                "`LLM_BACKEND=gemma_local` (alias: `local-transformers`)."
             ) from exc
 
         return {
@@ -328,7 +328,9 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _apply_auto_device_map(self, model_kwargs: dict[str, Any]) -> None:
         model_kwargs["device_map"] = "auto"
-        model_kwargs["max_memory"] = self._build_max_memory()
+        max_memory = self._build_max_memory()
+        if max_memory:
+            model_kwargs["max_memory"] = max_memory
         if self.offload_buffers:
             model_kwargs["offload_buffers"] = True
 
@@ -342,13 +344,17 @@ class LocalGemmaInferencer(BaseLLMBackend):
 
     def _build_max_memory(self) -> dict[Any, str]:
         if self.device_mode not in CUDA_DEVICE_MODES:
-            return {"cpu": f"{self.cpu_memory_limit_mb}MiB"}
+            if self.cpu_memory_limit_mb > 0:
+                return {"cpu": f"{self.cpu_memory_limit_mb}MiB"}
+            return {}
 
         gpu_index: Any = 0
-        return {
-            gpu_index: f"{self.gpu_memory_limit_mb}MiB",
-            "cpu": f"{self.cpu_memory_limit_mb}MiB",
-        }
+        max_memory: dict[Any, str] = {}
+        if self.gpu_memory_limit_mb > 0:
+            max_memory[gpu_index] = f"{self.gpu_memory_limit_mb}MiB"
+        if self.cpu_memory_limit_mb > 0:
+            max_memory["cpu"] = f"{self.cpu_memory_limit_mb}MiB"
+        return max_memory
 
     def _validate_runtime(self, torch: Any) -> None:
         if self.device_mode == "cuda" and not torch.cuda.is_available():

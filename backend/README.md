@@ -126,7 +126,8 @@ Ví dụ request:
 ## LLM backend config
 
 - `LLM_BACKEND=mock-gemma`: giu hanh vi mock hien tai
-- `LLM_BACKEND=local-transformers`: chuyen sang local Gemma skeleton
+- `LLM_BACKEND=gemma_local`: chuyen sang local Gemma runtime
+- `LLM_BACKEND=local-transformers`: alias cu, van duoc ho tro de tuong thich
 - `GEMMA_MODEL_ID`: id model Gemma muon dung
 - `GEMMA_DEVICE`: `cuda`, `cpu`, ...
 - `GEMMA_DTYPE`: `bfloat16`, `float16`, ...
@@ -136,15 +137,17 @@ Ví dụ request:
 - `GEMMA_TRUST_REMOTE_CODE`: bat khi model/backend can
 - `GEMMA_CPU_OFFLOAD`: cho phep offload mot phan model sang CPU
 - `GEMMA_OFFLOAD_BUFFERS`: bat offload buffer neu VRAM rat chat
-- `GEMMA_GPU_MEMORY_LIMIT_MB`: gioi han VRAM ma `device_map=auto` duoc phep dung
-- `GEMMA_CPU_MEMORY_LIMIT_MB`: gioi han RAM cho phan offload
+- `GEMMA_GPU_MEMORY_LIMIT_MB`: gioi han VRAM ma `device_map=auto` duoc phep dung; dat `0` de bo cap
+- `GEMMA_CPU_MEMORY_LIMIT_MB`: gioi han RAM cho phan offload; dat `0` de bo cap
 
-## Local Gemma notes
+## Gemma runtime notes
 
 - Model id mac dinh da dat theo Hugging Face model card: `google/gemma-4-E4B-it`
 - De dung local backend, can cai them dependency `transformers`, `accelerate`, `sentencepiece`, va `torch`
 - Neu dung quantization `4bit/8bit`, can them `bitsandbytes`
-- Tren may RTX 2050 4GB, `4bit` la cach thu hop ly nhat, nhung van co kha nang gap OOM vi Gemma 4 E4B-it khong nhe
+- `run_local_backend.ps1` mac dinh theo profile server H100: `bfloat16`, `quantization=none`, tat CPU offload, tat offload buffers, va tu dong lay `GEMMA_GPU_MEMORY_LIMIT_MB` theo ~90% VRAM neu phat hien H100
+- Script khong bat `--reload` mac dinh nua de tranh double-load model tren server; chi bat khi goi them `-Reload`
+- Neu khong phai H100, script se fallback sang profile `generic-cuda`; ban van co the override bang tham so tay
 
 ## Test local backend
 
@@ -160,13 +163,11 @@ Ví dụ request:
 .\test.ps1
 ```
 
-3. Neu muon doi mode:
+3. Neu muon doi mode hoac ep profile:
 
 ```powershell
-.\run_local_backend.ps1 -Device cuda -Quantization 4bit -CpuOffload $true -OffloadBuffers $true
+.\run_local_backend.ps1 -HardwareProfile h100
 ```
-
-Script se uu tien dung model local tai `D:\hackathon\chatbot\models\gemma-4-E4B-it` neu thu muc do ton tai. Neu khong, no moi fallback ve Hugging Face model id.
 
 Neu GPU khong du bo nho, hay thu lai bang CPU de smoke test wiring:
 
@@ -174,8 +175,8 @@ Neu GPU khong du bo nho, hay thu lai bang CPU de smoke test wiring:
 .\run_local_backend.ps1 -Device cpu -Quantization none -DType float32
 ```
 
-Voi GPU 4GB, nen uu tien:
+Neu can ep profile CUDA nhe hon:
 
 ```powershell
-.\run_local_backend.ps1 -Device cuda -Quantization 4bit -GpuMemoryLimitMB 3000 -CpuMemoryLimitMB 24576
+.\run_local_backend.ps1 -HardwareProfile generic-cuda -Quantization 4bit -CpuOffload $true -OffloadBuffers $true
 ```
