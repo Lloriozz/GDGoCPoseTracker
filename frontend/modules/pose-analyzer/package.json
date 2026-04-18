@@ -1,0 +1,13 @@
+{
+  "name": "pose-analyzer",
+  "version": "1.0.0",
+  "description": "On-device pose analysis via Vision + CoreML",
+  "main": "index.ts",
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "modulePaths": ["ios"]
+      }
+    }
+  }
+}

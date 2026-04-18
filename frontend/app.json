@@ -9,18 +9,29 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.long120505.frontend"
+      "bundleIdentifier": "com.long120505.frontend",
+      "appleTeamId": "U62LXS4PHV"
     },
     "android": {
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.long120505.frontend"
+      "package": "com.long120505.frontend",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-camera",
+        {
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
