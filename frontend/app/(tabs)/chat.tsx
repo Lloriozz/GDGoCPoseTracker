@@ -1,159 +1,98 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList,
+import React, { useRef } from 'react';
+import {
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { PlaceholderScreen } from '@/components/shared/PlaceholderScreen';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const PRIMARY = '#FF5E0E';
-
-const MOCK_MESSAGES = [
-  {
-    id: "1",
-    text: "Hey! How did your morning cardio session go today?",
-    sender: "trainer",
-    time: "09:00 AM",
-  },
-  {
-    id: "2",
-    text: "I literally just finished it! Crushed the 3-minute blast without stopping! 🏃‍♂️💨",
-    sender: "user",
-    time: "09:32 AM",
-  },
-  {
-    id: "3",
-    text: "That's exactly what I like to hear! 🔥",
-    sender: "trainer",
-    time: "09:35 AM",
-  },
-  {
-    id: "4",
-    text: "You're building great endurance. Make sure you hydrate and get some protein in right now.",
-    sender: "trainer",
-    time: "09:35 AM",
-  },
-  {
-    id: "5",
-    text: "Will do. Are we still on for the strength training assessment on Thursday?",
-    sender: "user",
-    time: "09:40 AM",
-  },
-  {
-    id: "6",
-    text: "Yes! Thursday at 4 PM. Be ready to push some weight.",
-    sender: "trainer",
-    time: "09:42 AM",
-  }
-];
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChatBubble } from '../../components/chat/ChatBubble';
+import { ChatComposer } from '../../components/chat/ChatComposer';
+import { QuickActionButton } from '../../components/chat/QuickActionButton';
+import { theme } from '../../constants/theme';
+import { useAuth } from '../../contexts/AuthContext';
+import { useChatbot } from '../../contexts/ChatbotContext';
 
 export default function ChatScreen() {
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
-  const [inputText, setInputText] = useState('');
-
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.headerLeft}>
-        <Image source={require('../../assets/ava-women.jpg')} style={styles.headerAvatar} />
-        <View>
-          <Text style={styles.headerName}>Coach Alice</Text>
-          <Text style={styles.headerStatus}>Online</Text>
-        </View>
-      </View>
-      <View style={styles.headerRight}>
-        <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="call-outline" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.iconBtn}>
-          <Ionicons name="videocam-outline" size={26} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderMessage = ({ item }: { item: typeof MOCK_MESSAGES[0] }) => {
-    const isUser = item.sender === 'user';
-    return (
-      <View style={[styles.messageWrapper, isUser ? styles.messageWrapperUser : styles.messageWrapperTrainer]}>
-        {!isUser && (
-          <Image source={require('../../assets/ava-women.jpg')} style={styles.messageAvatar} />
-        )}
-        <View style={styles.messageContent}>
-          <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleTrainer]}>
-            <Text style={[styles.messageText, isUser ? styles.messageTextUser : styles.messageTextTrainer]}>
-              {item.text}
-            </Text>
-          </View>
-          <Text style={[styles.timeText, isUser && { alignSelf: 'flex-end' }]}>{item.time}</Text>
-        </View>
-      </View>
-    );
-  };
-
-  const sendMessage = () => {
-    if (inputText.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        text: inputText,
-        sender: "user",
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages([...messages, newMessage]);
-      setInputText('');
-    }
-  };
+  const { user } = useAuth();
+  const { input, loading, messages, quickActions, resetConversation, sendMessage, setInput } =
+    useChatbot();
+  const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const greetingName = user?.username || user?.email?.split('@')[0] || 'bạn';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <LinearGradient
-        colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
-        locations={[0, 0.35, 1]}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <KeyboardAvoidingView 
-        style={styles.container} 
+      <KeyboardAvoidingView
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
       >
-        {renderHeader()}
-        
-        <FlatList
-          data={messages}
-          keyExtractor={item => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
+        <LinearGradient
+          colors={['rgba(255, 94, 14, 0.25)', '#0F0F0F', '#0F0F0F']}
+          locations={[0, 0.35, 1]}
+          style={StyleSheet.absoluteFillObject}
         />
 
-        {/* Input Area */}
-        <View style={styles.inputWrapper}>
-          <TextInput 
-            style={styles.textInput}
-            placeholder="Type a message..."
-            placeholderTextColor="#999"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-          />
-          {inputText.trim().length > 0 ? (
-            <TouchableOpacity style={styles.sendBtn} onPress={sendMessage}>
-              <Ionicons name="send" size={16} color="#fff" style={{marginLeft: 4, marginTop: 2}} />
-            </TouchableOpacity>
-          ) : (
-             <TouchableOpacity style={styles.iconBtnSm}>
-                <Ionicons name="camera-outline" size={26} color="#888" />
-             </TouchableOpacity>
-          )}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>PoseTracker Chat</Text>
         </View>
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(20, insets.bottom + 10) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.greeting}>{`Xin chào ${greetingName}!`}</Text>
+          <Text style={styles.hero}>Chúng ta nên bắt đầu từ đâu nhỉ?</Text>
+
+          {messages.length === 0 ? (
+            <View style={styles.quickActionGroup}>
+              {quickActions.map((item) => (
+                <QuickActionButton
+                  key={item.label}
+                  label={item.label}
+                  onPress={() => void sendMessage(item.prompt)}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.messageList}>
+              {messages.map((message) => (
+                <ChatBubble key={message.id} message={message} />
+              ))}
+            </View>
+          )}
+
+          {messages.length > 0 ? (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={resetConversation}
+              style={styles.resetButton}
+            >
+              <Text style={styles.resetText}>Bắt đầu lại</Text>
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
+
+        <ChatComposer
+          value={input}
+          onChangeText={setInput}
+          onSend={() => void sendMessage()}
+          loading={loading}
+        />
+
+        {Platform.OS === 'ios' ? <View style={{ height: insets.bottom }} /> : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -166,152 +105,58 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
   },
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  header: {
+    height: 60,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'transparent',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#333',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    justifyContent: 'center',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-  },
-  headerName: {
+  headerTitle: {
+    color: theme.colors.text,
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFF',
+    textAlign: 'center',
   },
-  headerStatus: {
-    fontSize: 13,
-    color: '#4ADE80',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconBtn: {
-    padding: 8,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 20,
-  },
-  messageWrapper: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    alignItems: 'flex-end',
-  },
-  messageWrapperUser: {
-    justifyContent: 'flex-end',
-  },
-  messageWrapperTrainer: {
-    justifyContent: 'flex-start',
-  },
-  messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  messageContent: {
-    maxWidth: '75%',
-  },
-  bubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 20,
-    marginBottom: 4,
-  },
-  bubbleTrainer: {
-    backgroundColor: '#1C1C1E',
-    borderBottomLeftRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  bubbleUser: {
-    backgroundColor: PRIMARY,
-    borderBottomRightRadius: 4,
-  },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  messageTextTrainer: {
-    color: '#FFF',
-  },
-  messageTextUser: {
-    color: '#fff',
-  },
-  timeText: {
-    fontSize: 11,
-    color: '#aaa',
-    marginTop: 2,
-    marginHorizontal: 4,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#1C1C1E',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#333',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
-  },
-  attachBtn: {
-    padding: 8,
-    marginRight: 4,
-  },
-  iconBtnSm: {
-    padding: 8,
-    marginLeft: 6,
-  },
-  textInput: {
+  scroll: {
     flex: 1,
-    backgroundColor: '#333',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 16,
-    color: '#FFF',
-    maxHeight: 100,
   },
-  sendBtn: {
-    backgroundColor: PRIMARY,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-    shadowColor: PRIMARY,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  }
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    flexGrow: 1,
+  },
+  greeting: {
+    fontSize: 20,
+    color: theme.colors.text,
+    fontWeight: '400',
+  },
+  hero: {
+    marginTop: 8,
+    color: theme.colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+    lineHeight: 34,
+    maxWidth: '90%',
+  },
+  quickActionGroup: {
+    marginTop: 24,
+  },
+  messageList: {
+    marginTop: 16,
+    paddingBottom: 10,
+  },
+  resetButton: {
+    alignSelf: 'center',
+    marginTop: 20,
+    marginBottom: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 94, 14, 0.15)',
+  },
+  resetText: {
+    color: '#FF5E0E',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });
