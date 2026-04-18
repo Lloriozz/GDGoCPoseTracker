@@ -52,7 +52,7 @@ export default function ChatbotScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const sessionId = useMemo(() => `mobile-session-${Date.now()}`, []);
   const userId = useMemo(() => user?.id || 'guest-user', [user?.id]);
-
+  
   // Lấy insets của điện thoại (Tai thỏ, Dynamic Island, viền dưới) để tính toán chuẩn xác
   const insets = useSafeAreaInsets();
 
