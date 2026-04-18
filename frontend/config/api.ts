@@ -1,7 +1,13 @@
 import { Platform } from 'react-native';
 
 const getApiBaseUrl = () => {
-  // Check for manual override via environment variable
+  // Check for environment variable override (production or dev)
+  const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (backendUrl) {
+    return backendUrl;
+  }
+
+  // Check for manual IP override via environment variable
   if (__DEV__) {
     const manualIp = process.env.EXPO_PUBLIC_API_IP;
     if (manualIp) {
@@ -18,7 +24,13 @@ const getApiBaseUrl = () => {
 };
 
 const getChatApiBaseUrl = () => {
-  // Check for manual override via environment variable
+  // Check for environment variable override (production or dev)
+  const chatUrl = process.env.EXPO_PUBLIC_CHAT_URL;
+  if (chatUrl) {
+    return chatUrl;
+  }
+
+  // Check for manual IP override via environment variable
   if (__DEV__) {
     const manualIp = process.env.EXPO_PUBLIC_API_IP;
     if (manualIp) {

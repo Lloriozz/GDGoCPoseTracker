@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../constants/theme';
 import { sendChatMessage } from '../services/chat';
 import { ChatUiMessage } from '../types/chat';
+import { useAuth } from '../contexts/AuthContext';
 
 const quickActions = [
   {
@@ -44,12 +45,13 @@ function buildMessage(role: 'assistant' | 'user', text: string, meta?: string): 
 }
 
 export default function ChatbotScreen() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const sessionId = useMemo(() => `mobile-session-${Date.now()}`, []);
-  const userId = useMemo(() => 'mobile-user-001', []);
+  const userId = useMemo(() => user?.id || 'guest-user', [user?.id]);
   
   // Lấy insets của điện thoại (Tai thỏ, Dynamic Island, viền dưới) để tính toán chuẩn xác
   const insets = useSafeAreaInsets();
@@ -132,7 +134,7 @@ export default function ChatbotScreen() {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.greeting}>Xin chào Huy!</Text>
+          <Text style={styles.greeting}>Xin chào {user?.username || user?.email?.split('@')[0] || 'bạn'}!</Text>
           <Text style={styles.hero}>Chúng ta nên bắt đầu từ đâu nhỉ?</Text>
 
           {messages.length === 0 ? (
