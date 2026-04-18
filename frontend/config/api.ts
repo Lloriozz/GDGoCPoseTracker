@@ -23,21 +23,49 @@ const buildBaseUrl = (port: string, path = '') => {
 };
 
 const getApiBaseUrl = () => {
+
   const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
   if (backendUrl) {
     return stripTrailingSlash(backendUrl);
+
+
+
+
+
+
+
+
   }
 
   return stripTrailingSlash(buildBaseUrl(DEFAULT_BACKEND_PORT, '/api'));
+
+
+
+
+
 };
 
 const getChatApiBaseUrl = () => {
+
   const chatUrl = process.env.EXPO_PUBLIC_CHAT_URL;
   if (chatUrl) {
     return stripTrailingSlash(chatUrl);
   }
 
   return stripTrailingSlash(buildBaseUrl(DEFAULT_CHAT_PORT));
+
+
+
+
+
+
+
+
+
+
+
+
+
 };
 
 export const API_BASE_URL = getApiBaseUrl();

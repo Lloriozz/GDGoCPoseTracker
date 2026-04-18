@@ -15,7 +15,7 @@ import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
-import { CHAT_WS_BASE_URL } from '../config/api';
+
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -29,7 +29,8 @@ const POSE_CONNECTIONS = [
 
 const SPEECH_COOLDOWN_MS = 4000;
 const LANDMARK_VISIBILITY_THRESHOLD = 0.5;
-const WS_BASE_URL = `${CHAT_WS_BASE_URL}/ws/pose`;
+const _WS_HOST = process.env.EXPO_PUBLIC_API_IP ?? '124.197.18.178';
+const WS_BASE_URL = `ws://${_WS_HOST}:8000/ws/pose`;
 
 type SessionStatus = 'IDLE' | 'RUNNING' | 'PAUSED';
 
