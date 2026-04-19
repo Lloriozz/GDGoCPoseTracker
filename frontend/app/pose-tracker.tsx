@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   View,
   StatusBar,
-  Animated,
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,18 +13,39 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Line } from 'react-native-svg';
+import Svg, { Line, Circle } from 'react-native-svg';
 import { analyzeFrame } from '../modules/pose-analyzer';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-const POSE_CONNECTIONS = [
-  [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-  [11, 23], [12, 24], [23, 24],
-  [23, 25], [25, 27], [24, 26], [26, 28],
-  [27, 31], [28, 32], [27, 29], [28, 30],
-  [0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6],
+// PoseNet-style colored limb groups
+// Each entry: [startIdx, endIdx, colorCorrect, colorWrong]
+const POSE_CONNECTIONS: [number, number, string, string][] = [
+  // Torso — orange/red
+  [11, 12, '#FF5E0E', '#E63946'],
+  [11, 23, '#FF5E0E', '#E63946'],
+  [12, 24, '#FF5E0E', '#E63946'],
+  [23, 24, '#FF5E0E', '#E63946'],
+  // Left arm — cyan
+  [11, 13, '#00C9FF', '#FF6B6B'],
+  [13, 15, '#00C9FF', '#FF6B6B'],
+  // Right arm — yellow
+  [12, 14, '#FFD93D', '#FF6B6B'],
+  [14, 16, '#FFD93D', '#FF6B6B'],
+  // Left leg — cyan
+  [23, 25, '#00C9FF', '#FF6B6B'],
+  [25, 27, '#00C9FF', '#FF6B6B'],
+  [27, 29, '#00C9FF', '#FF6B6B'],
+  [27, 31, '#00C9FF', '#FF6B6B'],
+  // Right leg — yellow
+  [24, 26, '#FFD93D', '#FF6B6B'],
+  [26, 28, '#FFD93D', '#FF6B6B'],
+  [28, 30, '#FFD93D', '#FF6B6B'],
+  [28, 32, '#FFD93D', '#FF6B6B'],
 ];
+
+// Joint index → radius (face joints smaller)
+const jointRadius = (idx: number) => (idx <= 10 ? 4 : 6);
 
 const SPEECH_COOLDOWN_MS = 4000;
 const LANDMARK_VISIBILITY_THRESHOLD = 0.4;
@@ -45,10 +65,6 @@ export default function PoseTrackerScreen() {
   const lastSpokenAtRef = useRef(0);
   const statusRef = useRef<SessionStatus>('IDLE');
   const cameraReadyRef = useRef(false);
-
-  const animatedPoints = useRef(
-    Array.from({ length: 33 }, () => new Animated.ValueXY({ x: -100, y: -100 }))
-  ).current;
 
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('IDLE');
   const [isCameraReady, setIsCameraReady] = useState(false);
@@ -78,18 +94,6 @@ export default function PoseTrackerScreen() {
     });
   }, []);
 
-  const updatePointsSmoothly = useCallback((newLandmarks: any[]) => {
-    const animations = newLandmarks.map((lp, i) => {
-      if (lp.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
-      return Animated.timing(animatedPoints[i], {
-        toValue: { x: (1 - lp.x) * SCREEN_W, y: lp.y * SCREEN_H },
-        duration: 80,
-        useNativeDriver: true,
-      });
-    }).filter(Boolean);
-    Animated.parallel(animations as any).start();
-  }, [animatedPoints]);
-
   const handleBack = useCallback(() => {
     statusRef.current = 'IDLE';
     setSessionStatus('IDLE');
@@ -117,7 +121,6 @@ export default function PoseTrackerScreen() {
 
         if (result.landmarks?.length > 0) {
           setLandmarks(result.landmarks);
-          updatePointsSmoothly(result.landmarks);
         } else {
           setLandmarks([]);
         }
@@ -146,7 +149,7 @@ export default function PoseTrackerScreen() {
         setTimeout(captureAndAnalyze, 50);
       }
     }
-  }, [exercise, addLog, updatePointsSmoothly]);
+  }, [exercise, addLog]);
 
   const toggleSession = useCallback(() => {
     if (sessionStatus === 'IDLE' || sessionStatus === 'PAUSED') {
@@ -181,39 +184,43 @@ export default function PoseTrackerScreen() {
         onCameraReady={() => { cameraReadyRef.current = true; setIsCameraReady(true); }}
       />
 
-      {/* 2. SKELETON OVERLAY */}
-      {sessionStatus !== 'IDLE' && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {landmarks.length > 0 && (
-            <Svg style={StyleSheet.absoluteFill}>
-              {POSE_CONNECTIONS.map(([start, end], i) => {
-                const p1 = landmarks[start];
-                const p2 = landmarks[end];
-                if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
-                return (
-                  <Line
-                    key={`line-${i}`}
-                    x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H}
-                    x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H}
-                    stroke={isCorrect ? '#FF5E0E' : '#E63946'}
-                    strokeWidth="4" strokeOpacity={0.85}
-                  />
-                );
-              })}
-            </Svg>
-          )}
-          {landmarks.length > 0 && animatedPoints.map((anim, index) => (
-            <Animated.View
-              key={`joint-${index}`}
-              style={[styles.landmarkDot, {
-                backgroundColor: isCorrect ? '#FF5E0E' : '#E63946',
-                width: index > 10 ? 8 : 5,
-                height: index > 10 ? 8 : 5,
-                transform: anim.getTranslateTransform(),
-              }]}
-            />
-          ))}
-        </View>
+      {/* 2. SKELETON OVERLAY — PoseNet style */}
+      {sessionStatus !== 'IDLE' && landmarks.length > 0 && (
+        <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+          {/* Limb lines with per-group color */}
+          {POSE_CONNECTIONS.map(([start, end, colorOk, colorBad], i) => {
+            const p1 = landmarks[start];
+            const p2 = landmarks[end];
+            if (!p1 || !p2 || p1.visibility < LANDMARK_VISIBILITY_THRESHOLD || p2.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
+            return (
+              <Line
+                key={`limb-${i}`}
+                x1={(1 - p1.x) * SCREEN_W} y1={p1.y * SCREEN_H}
+                x2={(1 - p2.x) * SCREEN_W} y2={p2.y * SCREEN_H}
+                stroke={isCorrect ? colorOk : colorBad}
+                strokeWidth="3.5"
+                strokeOpacity={0.9}
+                strokeLinecap="round"
+              />
+            );
+          })}
+          {/* Joint circles */}
+          {landmarks.map((lm, idx) => {
+            if (!lm || lm.visibility < LANDMARK_VISIBILITY_THRESHOLD) return null;
+            const cx = (1 - lm.x) * SCREEN_W;
+            const cy = lm.y * SCREEN_H;
+            const r = jointRadius(idx);
+            return (
+              <Circle
+                key={`joint-${idx}`}
+                cx={cx} cy={cy} r={r}
+                fill={isCorrect ? '#FFFFFF' : '#FFD93D'}
+                stroke={isCorrect ? '#FF5E0E' : '#E63946'}
+                strokeWidth="2"
+              />
+            );
+          })}
+        </Svg>
       )}
 
       {/* 3. UI OVERLAY */}
@@ -286,7 +293,6 @@ export default function PoseTrackerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  landmarkDot: { position: 'absolute', borderRadius: 10, zIndex: 10, borderColor: 'white', borderWidth: 1 },
   overlaySafe: { flex: 1, justifyContent: 'space-between' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10 },
   iconBtn: { padding: 8, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20 },
