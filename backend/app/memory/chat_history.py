@@ -1,6 +1,11 @@
+import logging
+
 from pydantic import BaseModel
 
 from app.db.database import get_connection, normalize_user_id
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ChatTurn(BaseModel):
@@ -14,7 +19,7 @@ class ChatHistoryStore:
         self._memory_turns: dict[str, list[dict[str, str]]] = {}
 
     def _should_use_memory(self, session_id: str) -> bool:
-        return session_id.startswith(("mobile-session-", "session-test"))
+        return session_id.startswith(settings.memory_session_prefixes)
 
     def get_messages(self, session_id: str) -> list[dict[str, str]]:
         if self._should_use_memory(session_id):
@@ -37,7 +42,12 @@ class ChatHistoryStore:
 
             rows = list(reversed(rows))
             return [ChatTurn(**dict(row)).model_dump() for row in rows]
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "chat_history: DB read failed for session=%s, falling back to memory. Error: %s",
+                session_id,
+                exc,
+            )
             return list(self._memory_turns.get(session_id, []))
 
     def append_turn(
@@ -75,7 +85,13 @@ class ChatHistoryStore:
                         """,
                         (session_id, user_id, user_message, assistant_message),
                     )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "chat_history: DB write failed for session=%s user=%s, falling back to memory. Error: %s",
+                session_id,
+                user_id,
+                exc,
+            )
             turns = self._memory_turns.setdefault(session_id, [])
             turns.append(
                 ChatTurn(

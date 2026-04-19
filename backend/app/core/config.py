@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 
@@ -15,7 +15,10 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "fitness-chatbot")
     environment: str = os.getenv("APP_ENV", "dev")
     llm_backend: str = os.getenv("LLM_BACKEND", "gemma_local")
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
     max_history_messages: int = int(os.getenv("MAX_HISTORY_MESSAGES", "1000"))
+    memory_session_prefixes: tuple = field(default_factory=lambda: ("mobile-session-", "session-test"))
+    memory_user_prefixes: tuple = field(default_factory=lambda: ("guest-user-", "mobile-user-"))
     rag_enabled: bool = _env_bool("RAG_ENABLED", True)
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "3"))
     rag_min_score: int = int(os.getenv("RAG_MIN_SCORE", "2"))

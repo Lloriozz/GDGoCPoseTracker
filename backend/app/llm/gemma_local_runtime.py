@@ -418,14 +418,14 @@ class LocalGemmaInferencer(BaseLLMBackend):
                 if a_msg:
                     messages.append({"role": "assistant", "content": a_msg})
 
-        messages.append({"role": "user", "content": user_prompt})
-
-        if system_prompt and messages and messages[0]["role"] == "user":
-            messages[0]["content"] = f"{system_prompt}\n\n{messages[0]['content']}"
-        elif system_prompt:
-            messages.insert(0, {"role": "user", "content": system_prompt})
+        # Option A: Attach system prompt to the CURRENT user turn (last turn),
+        # not to the oldest history turn, so the instruction stays close to the
+        # active question and is not buried when history is long.
+        current_user_content = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+        messages.append({"role": "user", "content": current_user_content})
 
         return messages
+
 
     def _build_system_prompt(self, prompt: dict[str, object]) -> str:
         base_system = str(prompt.get("system_prompt", "")).strip()

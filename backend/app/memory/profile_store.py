@@ -1,8 +1,12 @@
 import json
+import logging
 from hashlib import sha256
 
 from app.db.database import get_connection, normalize_user_id
+from app.core.config import settings
 from app.schemas.user_profile import UserProfile, UserProfilePatch
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileStore:
@@ -17,7 +21,7 @@ class ProfileStore:
         self._memory_profiles: dict[str, UserProfile] = {}
 
     def _should_use_memory(self, user_id: str) -> bool:
-        return user_id.startswith(("guest-user-", "mobile-user-"))
+        return user_id.startswith(settings.memory_user_prefixes)
 
     def get(self, user_id: str) -> UserProfile:
         if self._should_use_memory(user_id):
@@ -159,7 +163,12 @@ class ProfileStore:
                             payload["disliked_foods"],
                         ),
                     )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "profile_store: DB upsert failed for user=%s, falling back to memory. Error: %s",
+                memory_user_id,
+                exc,
+            )
             self._memory_profiles[memory_user_id] = merged
         return merged
 

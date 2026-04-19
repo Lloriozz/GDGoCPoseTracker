@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from app.db.database import get_connection, normalize_user_id
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class NutritionClarificationStore:
@@ -10,7 +14,7 @@ class NutritionClarificationStore:
         self._memory_payloads: dict[str, dict[str, object]] = {}
 
     def _should_use_memory(self, session_id: str) -> bool:
-        return session_id.startswith(("mobile-session-", "session-test"))
+        return session_id.startswith(settings.memory_session_prefixes)
 
     def get(self, session_id: str) -> dict[str, object] | None:
         if self._should_use_memory(session_id):
@@ -28,7 +32,12 @@ class NutritionClarificationStore:
                         (session_id,),
                     )
                     row = cursor.fetchone()
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "nutrition_clarification_store: DB read failed for session=%s, falling back to memory. Error: %s",
+                session_id,
+                exc,
+            )
             return self._memory_payloads.get(session_id)
 
         if row is None:
@@ -80,7 +89,12 @@ class NutritionClarificationStore:
                         """,
                         (session_id, user_id, original_message, encoded_payload),
                     )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "nutrition_clarification_store: DB write failed for session=%s, falling back to memory. Error: %s",
+                session_id,
+                exc,
+            )
             self._memory_payloads[session_id] = {
                 **payload,
                 "session_id": session_id,
@@ -103,5 +117,10 @@ class NutritionClarificationStore:
                         """,
                         (session_id,),
                     )
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "nutrition_clarification_store: DB delete failed for session=%s. Error: %s",
+                session_id,
+                exc,
+            )
             return
