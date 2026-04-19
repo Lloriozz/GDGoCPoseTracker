@@ -7,7 +7,7 @@ Mục tiêu là: bạn chỉ cần thả source thô vào `knowledge/raw/`, sau 
 
 Đặt file vào:
 
-- [knowledge/raw](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/raw>)
+- [knowledge/raw]
 
 Bạn có thể thả vào đây:
 
@@ -35,12 +35,12 @@ Tránh tên kiểu:
 
 Mở Codex tại:
 
-- [backend](</C:/Users/Huy/OneDrive/Documents/New project/backend>)
+- [backend]
 
 Lý do:
 
-- Codex sẽ đọc [AGENTS.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/AGENTS.md>)
-- Codex sẽ dùng rule trong [CODEX_WIKI.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/schema/CODEX_WIKI.md>)
+- Codex sẽ đọc [AGENTS.md]
+- Codex sẽ dùng rule trong [CODEX_WIKI.md]
 
 ## 3. Prompt ingest chuẩn
 
@@ -85,20 +85,18 @@ Khi chạy đúng workflow, Codex nên:
 2. tự phân loại source theo topic
 3. tạo page mới hoặc cập nhật page cũ trong `knowledge/wiki/`
 4. thêm wiki links `[[...]]`
-5. cập nhật [knowledge/wiki/index.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/wiki/index.md>)
-6. thêm log vào [knowledge/logs/ingest-log.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/logs/ingest-log.md>)
+5. cập nhật [knowledge/wiki/index.md]
+6. thêm log vào [knowledge/logs/ingest-log.md]
 7. giữ nguyên hoàn toàn `knowledge/raw/`
 
 ## 5. Sau khi ingest, kiểm tra ở đâu
 
 Mở và kiểm tra:
 
-- [knowledge/wiki/index.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/wiki/index.md>)
-- [knowledge/logs/ingest-log.md](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/logs/ingest-log.md>)
-- [knowledge/wiki](</C:/Users/Huy/OneDrive/Documents/New project/backend/knowledge/wiki>)
-
+- [knowledge/wiki/index.md]
+- [knowledge/logs/ingest-log.md]
+- [knowledge/wiki]
 Bạn nên xem:
-
 - page nào mới được tạo
 - page nào được cập nhật
 - liên kết giữa các page có hợp lý không
@@ -148,22 +146,12 @@ Do not modify anything under knowledge/raw.
 4. chạy prompt lint
 5. sửa source hoặc thêm source mới nếu cần
 
-### Không nên làm
+## 10. Không nên làm
 
 - nhét hàng chục file rất khác nhau trong một lượt đầu tiên
 - ingest quá nhiều source khi taxonomy còn chưa ổn
 - coi raw source như nơi để Codex chỉnh sửa
 - dùng wiki để thay tool tính số
-
-## 10. Gợi ý cho batch đầu tiên
-
-Batch đầu nên nhỏ và có ích ngay:
-
-- 2 source về món Việt / meal thực dụng
-- 2 source về nguyên tắc dinh dưỡng cơ bản
-- 1 source về fasting
-- 1 source về recovery
-- 1 source về beginner workout hoặc knee-friendly guidance
 
 ## 11. Checklist nhanh trước mỗi lượt ingest
 
@@ -172,11 +160,3 @@ Batch đầu nên nhỏ và có ích ngay:
 - source có đúng scope fitness/nutrition không
 - batch có quá nhiều không
 
-## 12. Kết quả mong muốn sau vài vòng
-
-Sau 3-5 vòng ingest, bạn nên có:
-
-- một `wiki/index.md` giàu liên kết hơn
-- các page meal/nutrition/workout/recovery/fasting rõ hơn
-- log ingest và lint rõ ràng
-- một knowledge base để sau này nối vào chatbot runtime
