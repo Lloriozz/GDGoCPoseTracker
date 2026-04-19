@@ -387,9 +387,26 @@ class LocalGemmaInferencer(BaseLLMBackend):
         user_prompt = self._build_user_prompt(user_prompt_payload).strip()
 
         messages: list[dict[str, str]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+
+        history = prompt.get("history", [])
+        if isinstance(history, list):
+            for item in history:
+                if not isinstance(item, dict):
+                    continue
+                u_msg = str(item.get("user_message", "")).strip()
+                a_msg = str(item.get("assistant_message", "")).strip()
+                if u_msg:
+                    messages.append({"role": "user", "content": u_msg})
+                if a_msg:
+                    messages.append({"role": "assistant", "content": a_msg})
+
         messages.append({"role": "user", "content": user_prompt})
+
+        if system_prompt and messages and messages[0]["role"] == "user":
+            messages[0]["content"] = f"{system_prompt}\n\n{messages[0]['content']}"
+        elif system_prompt:
+            messages.insert(0, {"role": "user", "content": system_prompt})
+
         return messages
 
     def _build_system_prompt(self, prompt: dict[str, object]) -> str:
@@ -457,7 +474,6 @@ class LocalGemmaInferencer(BaseLLMBackend):
             parts = [
                 f"Cau hoi hien tai: {message}",
                 f"Profile lien quan: {profile_summary}" if profile_summary else "",
-                f"Ngu canh truoc do:\n{history}" if history else "",
                 f"Thong tin tham khao neu lien quan:\n{kb_context}" if kb_context else "",
             ]
             return "\n\n".join(part for part in parts if part)
@@ -604,29 +620,27 @@ class LocalGemmaInferencer(BaseLLMBackend):
         return "\n".join(sections)
 
     def _render_messages(self, messages: list[dict[str, str]]) -> Any:
-        if hasattr(self._processor, "apply_chat_template"):
+        renderer = getattr(self._processor, "tokenizer", self._processor)
+        if hasattr(renderer, "apply_chat_template"):
             try:
-                return self._processor.apply_chat_template(
+                return renderer.apply_chat_template(
                     messages,
                     tokenize=True,
                     return_dict=True,
                     return_tensors="pt",
                     add_generation_prompt=True,
-                    enable_thinking=False,
                 )
-            except TypeError:
-                try:
-                    return self._processor.apply_chat_template(
-                        messages,
-                        tokenize=True,
-                        return_dict=True,
-                        return_tensors="pt",
-                        add_generation_prompt=True,
-                    )
-                except TypeError:
-                    pass
+            except Exception:
+                pass
 
-        return "\n\n".join(f"{item['role'].upper()}: {item['content']}" for item in messages)
+        # Fallback to manual Gemma template
+        prompt_parts = []
+        for item in messages:
+            role = item["role"]
+            content = item["content"].strip()
+            prompt_parts.append(f"<start_of_turn>{role}\n{content}<end_of_turn>\n")
+        prompt_parts.append("<start_of_turn>model\n")
+        return "".join(prompt_parts)
 
     def _move_inputs_to_model_device(self, inputs: Any) -> Any:
         model_device = self._get_model_device()

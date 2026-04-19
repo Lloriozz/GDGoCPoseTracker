@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 
 const DEFAULT_API_SCHEME = process.env.EXPO_PUBLIC_API_SCHEME ?? 'http';
 const DEFAULT_BACKEND_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT ?? '3000';
-const DEFAULT_CHAT_PORT = process.env.EXPO_PUBLIC_CHAT_PORT ?? '8000';
+const DEFAULT_CHAT_PORT = process.env.EXPO_PUBLIC_CHAT_PORT ?? '8001';
 
 const stripTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
