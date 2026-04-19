@@ -223,8 +223,8 @@ export default function ForumScreen() {
       />
 
       {/* Create Post Modal */}
-      <Modal visible={showCreatePost} animationType="slide">
-        <SafeAreaView style={styles.modalSafe}>
+      <Modal visible={showCreatePost} animationType="slide" statusBarTranslucent={false}>
+        <SafeAreaView style={styles.modalSafe} edges={['top', 'bottom']}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setShowCreatePost(false)}>
@@ -451,13 +451,15 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    paddingTop: 16,
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
