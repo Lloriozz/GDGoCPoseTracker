@@ -90,34 +90,34 @@ Nếu chưa có SSH key, cần tạo mới và sao chép public key để cấu 
 
 ```bash
 cat ~/.ssh/id_ed25519.pub
-
+```
 2. Kết nối tới GPU VM
 
 Địa chỉ PUBLIC_IP được cung cấp trong dashboard của FPT AI Factory.
 ```bash
 ssh ubuntu@[PUBLIC_IP]
-
+```
 Sau khi đăng nhập thành công, chuyển sang quyền quản trị:
 ```bash
 sudo -i
-
+```
 Bước 2: Tải mã nguồn từ GitHub
 
 Clone repository từ GitHub:
 ```bash
 git clone https://github.com/Lloriozz/GDGoCPoseTracker.git
 cd ~/GDGoCPoseTracker
-
+```
 Do phần chatbot backend nằm trong nhánh main, không cần checkout sang nhánh khác nếu mục tiêu là triển khai backend hiện tại.
 
 Có thể kiểm tra các nhánh hiện có bằng lệnh:
 ```bash
 git branch -a
-
+```
 Sau đó chuyển vào thư mục backend:
 ```bash
 cd backend
-
+```
 Lưu ý: Thư mục backend là nơi chứa mã nguồn backend chatbot. Các tệp liên quan tới mô hình LLM được đặt trong thư mục backend/modelLLM theo cấu trúc triển khai hiện tại của dự án.
 
 Bước 3: Cài đặt môi trường Python
@@ -125,39 +125,41 @@ Bước 3: Cài đặt môi trường Python
 Trước tiên, cập nhật danh sách gói hệ thống:
 ```bash
 apt update
-
+```
 Cài đặt Python 3.11, công cụ tạo môi trường ảo và các thành phần cần thiết:
 ```bash
 apt install -y python3.11 python3.11-venv python3-pip git
-
+```
 Khởi tạo virtual environment ngay trong thư mục backend:
 ```bash
 python3.11 -m venv .venv
-
+```
 Kích hoạt môi trường ảo:
 ```bash
 source .venv/bin/activate
-
+```
 Nâng cấp pip:
 ```bash
 python -m pip install --upgrade pip
+```
 Bước 4: Cài đặt các thư viện phụ thuộc
 
 Cài đặt các thư viện backend và thành phần phục vụ suy luận mô hình:
 ```bash
 pip install fastapi "uvicorn[standard]" pydantic accelerate sentencepiece protobuf huggingface_hub
-
+```
 Cài đặt PyTorch tương thích CUDA 12.4:
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-
+```
 Cài đặt thư viện transformers phiên bản mới nhất từ GitHub:
 ```bash
 pip install git+https://github.com/huggingface/transformers
-
+```
 Để đảm bảo môi trường đã được kích hoạt chính xác, có thể chạy lại:
-
+```bash
 source .venv/bin/activate
+```
 Bước 5: Vị trí lưu trữ mô hình LLM
 
 Trong cấu trúc backend hiện tại, các tệp mô hình ngôn ngữ lớn được đặt trong thư mục:
@@ -181,7 +183,7 @@ Trước khi khởi chạy backend, cần cấu hình các biến môi trường
 ```bash
 export DATABASE_URL='[POSTGRESQL_DATABASE_URL]'
 export DATABASE_SCHEMA=public
-
+```
 2. Cấu hình backend mô hình ngôn ngữ
 
 Thiết lập như sau:
@@ -195,9 +197,11 @@ export GEMMA_CPU_OFFLOAD=false
 export GEMMA_OFFLOAD_BUFFERS=false
 export GEMMA_GPU_MEMORY_LIMIT_MB=0
 export GEMMA_CPU_MEMORY_LIMIT_MB=0
-
+```
 
 Bước 7: Khởi chạy backend server
 
 # Chạy server ở chế độ công khai trên port 8000
+```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
