@@ -15,6 +15,9 @@ export function ChatComposer({ value, onChangeText, onSend, loading = false }: C
 
   return (
     <View style={styles.wrapper}>
+      <TouchableOpacity activeOpacity={0.8} style={styles.sideButton}>
+        <Ionicons name="add" size={34} color="#707070" />
+      </TouchableOpacity>
       <View style={styles.inputShell}>
         <TextInput
           value={value}
@@ -24,11 +27,11 @@ export function ChatComposer({ value, onChangeText, onSend, loading = false }: C
           style={styles.input}
           multiline
         />
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={canSend ? onSend : undefined}
-          style={styles.trailingButton}
-        >
+        <TouchableOpacity activeOpacity={0.8} onPress={canSend ? onSend : undefined} style={styles.trailingButton}>
+
+
+
+
           {loading ? (
             <ActivityIndicator color={theme.colors.primary} size="small" />
           ) : canSend ? (
@@ -44,14 +47,26 @@ export function ChatComposer({ value, onChangeText, onSend, loading = false }: C
 
 const styles = StyleSheet.create({
   wrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 10,
     backgroundColor: '#1C1C1E',
     borderTopWidth: 1,
     borderTopColor: '#333',
+    gap: 10,
+  },
+  sideButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   inputShell: {
+    flex: 1,
     minHeight: 50,
     maxHeight: 120,
     borderRadius: theme.radius.round,
