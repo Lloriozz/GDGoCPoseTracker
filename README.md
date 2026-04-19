@@ -1,21 +1,22 @@
-Tài liệu này hướng dẫn chi tiết quy trình triển khai hệ thống PoseTracker (Computer Vision) từ môi trường Local lên server GPU High-Performance (NVIDIA H100) tại FPT AI Factory.
+Tài liệu này hướng dẫn chi tiết quy trình triển khai hệ thống PoseTracker (Computer Vision) và ChatBot từ môi trường Local lên server GPU High-Performance (NVIDIA H100) tại FPT AI Factory.
 
+# PoseTracker Deployment Process
 
-## Bước 1: Thiết lập môi trường trên GPU VM
+## Step 1: Setting up the environment on GPU VM
 
-Tạo SSH key và copy public key to FPT AI Factory (Chưa có thì hỏi AI cách generate SSH Key)
+Create SSH key and copy public key to FPT AI Factory (If you don’t have one, ask AI how to generate SSH Key)
 ```bash
 cat ~/.ssh/id_ed25519.pub
 ```
 
-PUBLIC_IP lấy từ trong dashboard của FPT AI Factory
+PUBLIC_IP is obtained from the FPT AI Factory dashboard
 ```bash
 ssh ubuntu@[PUBLIC_IP]
 ```
 
-Sau khi SSH vào server, thực hiện các bước sau:
+After SSH into the server, perform the following steps:
 
-### 1. Cập nhật hệ thống & Cài đặt thư viện Python
+### 1. Update system & Install Python libraries
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install python3-pip python3-venv libgl1 -y
@@ -27,7 +28,7 @@ git clone https://github.com/Lloriozz/GDGoCPoseTracker.git
 cd PoseTracker
 ```
 
-### 3. Khởi tạo Virtual Environment
+### 3. Initialize Virtual Environment
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -38,158 +39,141 @@ pip install daphne # Để chạy server ASGI
 
 ---
 
-## Bước 2: Cấu hình Django 
+## Step 2: Django Configuration
 
-Để server có thể nhận request từ bên ngoài (Internet) và mobile app, file `settings.py` cần được cấu hình chính xác để tránh lỗi `DisallowedHost` hoặc `ImproperlyConfigured`.
+To allow the server to receive requests from outside (Internet) and the mobile app, the settings.py file needs to be configured accurately to avoid DisallowedHost or ImproperlyConfigured errors.
 
-### 1. Cấu hình file `detect_model/web/server/exercise_correction/settings.py`
-- **SECRET_KEY**: Đảm bảo không để trống.
-- **ALLOWED_HOSTS**: Thêm IP của VM và dấu `*` để chấp nhận request từ Expo.
-- **CORS**: Cấu hình `corsheaders` để tránh lỗi cross-origin trên mobile.
+### 1. Configure file detect_model/web/server/exercise_correction/settings.py
+- **SECRET_KEY**: Ensure it is not empty.
+- **ALLOWED_HOSTS**: Add the VM’s IP and * to accept requests from Expo.
+- **CORS**: Configure corsheaders to avoid cross-origin errors on mobile.
 
 ---
 
-## Bước 3: Khởi chạy Server Backend
+## Step 3: Start Backend Server
 
-Sử dụng **Daphne** để hỗ trợ xử lý bất đồng bộ (Async), giúp việc nhận frame hình ảnh liên tục không bị nghẽn.
+Use Daphne to support asynchronous processing (Async), helping to continuously receive image frames without bottlenecks.
 
 ```bash
 cd detect_model/web/server
 source ../../.venv/bin/activate
 
-# Chạy server ở chế độ công khai trên port 8000
+# Note: Ensure the VM’s Firewall has port 8000 open
 daphne -b 0.0.0.0 -p 8000 exercise_correction.asgi:application
 ```
 > **Lưu ý:** Đảm bảo Firewall của VM đã mở port 8000 
 
 
-### Cập nhật code mới nhất từ GitHub:
+### Update latest code from GitHub:
 ```bash
 git stash
 git pull origin main
 git stash pop
 ```
 
-### Chạy ngầm server (Background process):
+### Run server in background (Background process):
 ```bash
 nohup daphne -b 0.0.0.0 -p 8000 exercise_correction.asgi:application > server.log 2>&1 &
 ```
 
 
-# Quy trình triển khai Chatbot Backend trên GPU VM
+# ChatBot Deployment Process
+This document describes the setup and launch process for the chatbot backend system on the GPU VM server. The backend system is deployed from the GDGoCPoseTracker repository, where the chatbot part is located in the backend directory of the main branch.
+## Bước 1: Step 1: Setting up the environment on GPU VM
+Before deployment, prepare SSH access to the GPU virtual machine provided on the FPT AI Factory platform.
 
-Tài liệu này mô tả quy trình thiết lập và khởi chạy hệ thống chatbot backend trên máy chủ GPU VM. Hệ thống backend được triển khai từ repository `GDGoCPoseTracker`, trong đó phần chatbot nằm trong thư mục `backend` của nhánh `main`, còn các tệp mô hình ngôn ngữ lớn (LLM) được tổ chức trong thư mục `backend/modelLLM`.
-
-## Bước 1: Thiết lập môi trường trên GPU VM
-
-Trước khi triển khai, cần chuẩn bị quyền truy cập SSH vào máy ảo GPU được cấp trên nền tảng FPT AI Factory.
-
-### 1. Tạo SSH key và lấy public key
-
-Nếu chưa có SSH key, cần tạo mới và sao chép public key để cấu hình quyền truy cập trên FPT AI Factory.
-
+### 1. Create SSH key and get public key
+If you don’t have an SSH key, create a new one and copy the public key to configure access rights on FPT AI Factory
 ```bash
 cat ~/.ssh/id_ed25519.pub
 ```
-2. Kết nối tới GPU VM
+2. Connect to GPU VM
 
-Địa chỉ PUBLIC_IP được cung cấp trong dashboard của FPT AI Factory.
+The PUBLIC_IP address is provided in the FPT AI Factory dashboard.
 ```bash
 ssh ubuntu@[PUBLIC_IP]
 ```
-Sau khi đăng nhập thành công, chuyển sang quyền quản trị:
+After successful login, switch to administrator privileges:
 ```bash
 sudo -i
 ```
-Bước 2: Tải mã nguồn từ GitHub
+Step 2: Download source code from GitHub
 
-Clone repository từ GitHub:
+Clone the repository from GitHub:
 ```bash
 git clone https://github.com/Lloriozz/GDGoCPoseTracker.git
 cd ~/GDGoCPoseTracker
 ```
-Do phần chatbot backend nằm trong nhánh main, không cần checkout sang nhánh khác nếu mục tiêu là triển khai backend hiện tại.
+Since the chatbot backend is in the main branch, no need to checkout to another branch if the goal is to deploy the current backend.
 
-Có thể kiểm tra các nhánh hiện có bằng lệnh:
+You can check the existing branches with the command:
 ```bash
 git branch -a
 ```
-Sau đó chuyển vào thư mục backend:
+Then navigate to the backend directory:
 ```bash
 cd backend
 ```
-Lưu ý: Thư mục backend là nơi chứa mã nguồn backend chatbot. Các tệp liên quan tới mô hình LLM được đặt trong thư mục backend/modelLLM theo cấu trúc triển khai hiện tại của dự án.
+Note: The backend directory contains the chatbot backend source code. The files related to the LLM model are placed in the backend/modelLLM directory according to the current project deployment structure.
 
-Bước 3: Cài đặt môi trường Python
+Bước 3: Install Python environment
 
-Trước tiên, cập nhật danh sách gói hệ thống:
+First, update the system package list:
 ```bash
 apt update
 ```
-Cài đặt Python 3.11, công cụ tạo môi trường ảo và các thành phần cần thiết:
+Install Python 3.11, virtual environment creation tool, and necessary components:
 ```bash
 apt install -y python3.11 python3.11-venv python3-pip git
 ```
-Khởi tạo virtual environment ngay trong thư mục backend:
+Initialize the virtual environment directly in the backend directory:
 ```bash
 python3.11 -m venv .venv
 ```
-Kích hoạt môi trường ảo:
+Activate the virtual environment:
 ```bash
 source .venv/bin/activate
 ```
-Nâng cấp pip:
+Upgrade pip:
 ```bash
 python -m pip install --upgrade pip
 ```
-Bước 4: Cài đặt các thư viện phụ thuộc
+Step 4: Install dependent libraries
 
-Cài đặt các thư viện backend và thành phần phục vụ suy luận mô hình:
+Install backend libraries and components for model inference:
 ```bash
 pip install fastapi "uvicorn[standard]" pydantic accelerate sentencepiece protobuf huggingface_hub
-```
-Cài đặt PyTorch tương thích CUDA 12.4:
-```bash
+
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-```
-Cài đặt thư viện transformers phiên bản mới nhất từ GitHub:
-```bash
+
 pip install git+https://github.com/huggingface/transformers
 ```
-Để đảm bảo môi trường đã được kích hoạt chính xác, có thể chạy lại:
+To ensure the environment is activated correctly, you can run again:
 ```bash
 source .venv/bin/activate
 ```
-Bước 5: Vị trí lưu trữ mô hình LLM
+Step 5: LLM Model Storage Location
+The LLM Model (fine-tuned from the original Gemma 4 E4B-IT model) is hosted on Hugging Face and is loaded directly from the following model repository:
 
-Trong cấu trúc backend hiện tại, các tệp mô hình ngôn ngữ lớn được đặt trong thư mục:
+HuyTuiTen/fitnesschatbot-v1
 
-backend/modelLLM
+download the model directly from Hugging Face via GEMMA_MODEL_ID, or
+use the pre-placed for inference.
 
-Thư mục này được sử dụng để lưu trữ hoặc quản lý các model files phục vụ backend chatbot trong quá trình triển khai nội bộ.
+Step 6: Configure Environment Variables
 
-Tùy theo cách tổ chức runtime, backend có thể:
+Before starting the backend, configure the environment variables related to the database and language model backend.
 
-tải mô hình trực tiếp từ Hugging Face thông qua GEMMA_MODEL_ID, hoặc
-sử dụng các tệp mô hình đã được đặt sẵn trong backend/modelLLM để phục vụ suy luận cục bộ.
-
-Với trường hợp triển khai thực tế trên GPU VM, cần bảo đảm các model files cần thiết đã được đặt đúng trong thư mục này nếu hệ thống yêu cầu chạy từ tệp cục bộ.
-
-Bước 6: Cấu hình biến môi trường
-
-Trước khi khởi chạy backend, cần cấu hình các biến môi trường liên quan tới cơ sở dữ liệu và backend mô hình ngôn ngữ.
-
-1. Cấu hình kết nối cơ sở dữ liệu PostgreSQL
+1. Configure PostgreSQL database connection
 ```bash
 export DATABASE_URL='[POSTGRESQL_DATABASE_URL]'
 export DATABASE_SCHEMA=public
 ```
-2. Cấu hình backend mô hình ngôn ngữ
+2. Configure language model backend
 
-Thiết lập như sau:
 ```bash
 export LLM_BACKEND=gemma_local
-export GEMMA_MODEL_ID=./modelLLM
+export GEMMA_MODEL_ID=HuyTuiTen/fitnesschatbot-v1
 export GEMMA_DEVICE=cuda
 export GEMMA_DTYPE=bfloat16
 export GEMMA_QUANTIZATION=none
@@ -199,9 +183,12 @@ export GEMMA_GPU_MEMORY_LIMIT_MB=0
 export GEMMA_CPU_MEMORY_LIMIT_MB=0
 ```
 
-Bước 7: Khởi chạy backend server
+Bước 7: Start the backend server
 
-# Chạy server ở chế độ công khai trên port 8000
+# Run server in public mode on port 8000
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+Note: The chatbot’s knowledge base is built according to the architecture of Karpathy’s LLM Wiki, so you can easily supplement data for the chatbot by adding new sources with the ingest process; detailed instructions are presented in the INGEST_WORKFLOW.md file located in the knowledge directory within the backend section.
+text
