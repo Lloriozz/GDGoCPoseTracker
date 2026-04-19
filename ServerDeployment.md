@@ -1,5 +1,3 @@
-
-
 ### File README.md cho dự án của ông:
 
 ```markdown
