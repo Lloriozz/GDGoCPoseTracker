@@ -42,14 +42,18 @@ const EXERCISES = [
   },
 ];
 
+type TrackingMode = 'server' | 'quickpose';
+
 export default function TabLayout() {
   const [showPoseModal, setShowPoseModal] = React.useState(false);
+  const [trackingMode, setTrackingMode] = React.useState<TrackingMode>('quickpose');
   const router = useRouter();
 
   const handleSelectExercise = (exerciseKey: string) => {
     setShowPoseModal(false);
+    const pathname = trackingMode === 'quickpose' ? '/quickpose-tracker' : '/pose-tracker';
     router.push({
-      pathname: '/pose-tracker' as any,
+      pathname: pathname as any,
       params: { exercise: exerciseKey },
     });
   };
@@ -128,6 +132,34 @@ export default function TabLayout() {
               <Text style={styles.modalSubtitle}>
                 Select an activity to start pose tracking
               </Text>
+            </View>
+
+            {/* Tracking Mode Toggle */}
+            <View style={styles.modeToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  trackingMode === 'quickpose' && styles.modeBtnActive,
+                ]}
+                onPress={() => setTrackingMode('quickpose')}
+              >
+                <Ionicons name="phone-portrait-outline" size={16} color={trackingMode === 'quickpose' ? '#FFF' : '#A1A1A1'} />
+                <Text style={[styles.modeBtnText, trackingMode === 'quickpose' && styles.modeBtnTextActive]}>
+                  On-Device
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modeBtn,
+                  trackingMode === 'server' && styles.modeBtnActive,
+                ]}
+                onPress={() => setTrackingMode('server')}
+              >
+                <Ionicons name="cloud-outline" size={16} color={trackingMode === 'server' ? '#FFF' : '#A1A1A1'} />
+                <Text style={[styles.modeBtnText, trackingMode === 'server' && styles.modeBtnTextActive]}>
+                  Server AI
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.grid}>
@@ -262,6 +294,35 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#FFF',
+  },
+
+  // Mode toggle
+  modeToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#0F0F0F',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 20,
+  },
+  modeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  modeBtnActive: {
+    backgroundColor: PRIMARY,
+  },
+  modeBtnText: {
+    color: '#A1A1A1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modeBtnTextActive: {
     color: '#FFF',
   },
 });
