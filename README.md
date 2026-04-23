@@ -1,4 +1,43 @@
-Tài liệu này hướng dẫn chi tiết quy trình triển khai hệ thống PoseTracker (Computer Vision) và ChatBot từ môi trường Local lên server GPU High-Performance (NVIDIA H100) tại FPT AI Factory.
+# GDGoC PoseTracker
+
+An AI-powered fitness coaching app built with React Native (Expo) that provides **real-time pose estimation**, **rep counting**, and **form feedback** to help users exercise with proper technique.
+
+## Screenshots
+
+<p align="center">
+  <img src="frontend/assets/IMG_5221.PNG" width="250" alt="Bicep Curls - Great Form" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="frontend/assets/IMG_5223.PNG" width="250" alt="Bicep Curls - Form Feedback" />
+</p>
+
+## Features
+
+- **On-Device Pose Tracking** — QuickPose SDK for real-time skeleton overlay, rep counting, and hold timing directly on your iPhone
+- **Server AI Tracking** — WebSocket-based pose analysis using custom-trained CoreML/MediaPipe models running on a GPU backend
+- **Exercise Support** — Bicep Curls, Squats, Lunges, and Plank with exercise-specific feedback
+- **Real-Time Form Feedback** — Body position corrections, joint visibility alerts, and exercise-specific coaching cues
+- **Conditional Styling** — Skeleton overlay turns green when form score exceeds 80%
+- **AI Fitness Chatbot** — LLM-powered chatbot (fine-tuned Gemma) for workout advice and fitness Q&A
+
+## Tech Stack
+
+- **Frontend** — React Native, Expo, TypeScript, Expo Router
+- **Pose Estimation** — QuickPose SDK (on-device), Vision + CoreML (server)
+- **ML Models** — KNN (bicep), Logistic Regression (squat/lunge/plank), exported via coremltools
+- **Backend** — Django (pose API), FastAPI (chatbot), Daphne (ASGI/WebSocket)
+- **LLM** — Fine-tuned Gemma 4 E4B-IT (`HuyTuiTen/fitnesschatbot-v1`)
+- **Infrastructure** — FPT AI Factory GPU VM (NVIDIA H100)
+
+## Project Structure
+
+```
+GDGoCPoseTracker/
+├── frontend/          # React Native Expo app
+├── backend/           # Chatbot FastAPI backend + LLM
+└── detect_model/      # ML training, CoreML export, Django pose API
+```
+
+---
 
 # PoseTracker Deployment Process
 
